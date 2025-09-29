@@ -32,11 +32,11 @@ class TaskCache:
     def _evict_if_needed(self):
         # evict oldest items if cache is too large
 
-        # Check item count
+        # check item count
         while len(self._cache) > self.max_items:
             self._cache.popitem(last=False)
 
-        # Check memory usage
+        # check memory usage
         cache_size = sys.getsizeof(self._cache)
         while cache_size > self.max_memory_bytes and self._cache:
             self._cache.popitem(last=False)
@@ -53,10 +53,10 @@ class TaskCache:
         if key in self._cache:
             response, timestamp = self._cache.pop(key)
             if time.time() - timestamp < self.ttl_seconds:
-                # Move to end (most recently used)
+                # move to end (most recently used)
                 self._cache[key] = (response, timestamp)
                 return response
-            # Expired, don't re-add
+            # expired, don't re-add
         return None
 
     def set(self, request: TaskRequest, response: TaskResponse) -> None:
