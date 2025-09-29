@@ -62,7 +62,7 @@ async def create_specialized_agents() -> dict[str, StatelessSubAgent]:
         capability=AgentCapability.RESEARCH,
         model=llm,
         prompt_template="""
-You are an extremely correct and dilligent specialized research agent.
+You are an extremely correct and diligent specialized research agent.
 
 Task: {objective}
 Data to research: ```{data}```
@@ -100,7 +100,7 @@ Research relevant information and return as JSON strictly following the followin
         capability=AgentCapability.ANALYSIS,
         model=llm,
         prompt_template="""
-You are an extremely correct and dilligent specialized analysis agent.
+You are an extremely correct and diligent specialized analysis agent.
 
 Task: {objective}
 Data to analyze: ```{data}```
@@ -139,7 +139,7 @@ Analyze relevant information and return as JSON strictly following the following
         capability=AgentCapability.SYNTHESIS,
         model=llm,
         prompt_template="""
-You are an extremely correct and dilligent specialized data synthesis agent.
+You are an extremely correct and diligent specialized data synthesis agent.
 
 Task: {objective}
 Data to synthesise: ```{data}```
@@ -178,7 +178,7 @@ Analyze relevant information and return as JSON strictly following the following
         capability=AgentCapability.VALIDATION,
         model=llm,
         prompt_template="""
-You are an extremely correct and dilligent validation agent.
+You are an extremely correct and diligent validation agent.
 
 Task: {objective}
 Data to validate: ```{data}```
