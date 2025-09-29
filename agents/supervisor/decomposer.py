@@ -213,7 +213,7 @@ Rules:
         """
         # step 1: decompose into subtasks
         decomposition_prompt = f"""
-You are extremely correct and diligent expert task planner. Decompose the complex task into well-defined, atomic subtasks.
+You are extremely correct and diligent expert task planner. Decompose the complex task into well-defined subtasks.
 Don't go overboard though - keep subtasks focused and manageable.
 
 Task: {objective}
@@ -223,7 +223,8 @@ Analysis: ```{analysis.model_dump_json() if analysis else "None"}```
 Rules:
 - Keep subtasks focused and atomic
 - Each subtask should have a clear, measurable objective
-- ALL relevant data MUST be passed to the subtask
+- DO NOT assume subtask have access to data outside of what you provide
+- ALL relevant data that might help should be included in subtask data
     """
 
         logger.debug("decomposing_prompt", prompt=decomposition_prompt)
