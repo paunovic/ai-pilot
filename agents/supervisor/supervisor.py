@@ -72,7 +72,8 @@ Consider:
 1. Can this be done by a single agent or needs multiple?
 2. Are subtasks independent (parallel) or dependent (sequential)?
 3. Does this need consensus from multiple agents?
-4. Is this a large dataset needing map-reduce?
+
+IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MUST respond ONLY with a structured JSON response that is compatible with Pydantic.
 """
 
         logger.info("analyzing_request", prompt=analysis_prompt)
@@ -97,10 +98,14 @@ Consider:
 
         state["analysis"] = response["parsed"]
 
+        logger.info("analysis_complete", state=state)
+
         return state
 
     async def decompose_task(self, state: dict[str, Any]) -> dict[str, Any]:
         # decompose complex task into subtasks
+
+        logger.info(f"state before decompose: {state}")
 
         strategy, tasks = await self.decomposer.decompose(
             llm=self.llm,
@@ -160,7 +165,8 @@ Consider:
 
         # use LLM to synthesize if multiple results
         if len(results) > 1:
-            synthesis_prompt = f"""You are extremely correct and diligent at synthesizing information from multiple sources into a coherent, concise summary.
+            synthesis_prompt = f"""
+You are extremely correct and diligent at synthesizing information from multiple sources into a coherent, concise summary.
 
 Results: {json.dumps(results, indent=2)}
 
@@ -241,6 +247,6 @@ Provide a comprehensive summary that addresses the original request."""
             self._end_trace(trace, TaskStatus.COMPLETE, supervisor_tokens, supervisor_cost)
             return response
         except Exception as e:
-            logger.error("supervisor_execution_failed", error=str(e), traceback=True)
+            logger.error("supervisor_execution_failed", error=str(e))
             self._end_trace(trace, TaskStatus.FAILED, supervisor_tokens, supervisor_cost, str(e))
             raise

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from agents.base.base import StatelessSubAgent
 from agents.base.model import (
     TaskRequest,
+    TaskPriority,
     AgentCapability,
 )
 from agents.supervisor.supervisor import SupervisorAgent
@@ -80,7 +81,8 @@ Research thoroughly and accurately using the provided data.
 Task: {objective}
 Data to research: ```{data}```
 
-IMPORTANT: You must return your findings and sources as LISTS where each item is a separate string.
+IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MUST respond ONLY with a structured JSON response that is compatible with Pydantic.
+
 For example:
 - findings should be ["finding 1", "finding 2", "finding 3"] NOT a single string with bullet points
 - sources should be ["source 1", "source 2", "source 3"] NOT a single string
@@ -127,13 +129,7 @@ Consider factors like:
 If applicable, also include a "confidence_reasoning" field explaining your confidence level.
 
 Analyze relevant information and return as JSON strictly following the following format:
-{{
-    "patterns": [...],
-    "insights": [...],
-    "recommendations": [...]
-    "confidence": 0.0-1.0
-    "confidence_reasoning": "explanation of confidence level"
-}}
+{{"patterns": [...],"insights": [...],"recommendations": [...],"confidence": 0.0-1.0,"confidence_reasoning": "explanation of confidence level"}}
 
 `...` indicates items and should be filled accordingly.
 """
@@ -167,13 +163,7 @@ Consider factors like:
 If applicable, also include a "confidence_reasoning" field explaining your confidence level.
 
 Analyze relevant information and return as JSON strictly following the following format:
-{{
-    "summary": [...],
-    "key_points": [...],
-    "conclusions": [...]
-    "confidence": 0.0-1.0
-    "confidence_reasoning": "explanation of confidence level"
-}}
+{{"summary": [...],"key_points": [...],"conclusions": [...],"confidence": 0.0-1.0,"confidence_reasoning": "explanation of confidence level"}}
 
 `...` indicates items and should be filled accordingly.
 """
@@ -207,13 +197,7 @@ Consider factors like:
 If applicable, also include a "confidence_reasoning" field explaining your confidence level.
 
 Analyze relevant information and return as JSON strictly following the following format:
-{{
-    "is_valid": true/false,
-    "issues": [...],
-    "suggestions": [...]
-    "confidence": 0.0-1.0
-    "confidence_reasoning": "explanation of confidence level"
-}}
+{{"is_valid": true/false,"issues": [...],"suggestions": [...],"confidence": 0.0-1.0"confidence_reasoning": "explanation of confidence level"}}
 
 `...` indicates items and should be filled accordingly.
 """
@@ -259,7 +243,7 @@ async def main():
     # print(f"Status: {response.status}")
     # print(response.result["response"])
 
-    # example 1: pull from cache
+    # # example 1: pull from cache
     # complex_request = TaskRequest(
     #     task_type="comprehensive_analysis",
     #     objective="Analyze customer feedback for Q3, identify top issues, and generate recommendations",
