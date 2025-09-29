@@ -34,7 +34,7 @@ class OrchestrationEngine:
         tasks: list[TaskRequest],
         agents: dict[str, StatelessSubAgent]
     ) -> list[TaskResponse]:
-        """Execute tasks sequentially, respecting dependencies"""
+        # execute tasks sequentially, respecting dependencies
         responses = []
         completed_tasks = set()
         task_results = {}  # store results for dependent tasks
@@ -96,7 +96,8 @@ class OrchestrationEngine:
         tasks: list[TaskRequest],
         agents: dict[str, StatelessSubAgent]
     ) -> list[TaskResponse]:
-        """Execute tasks in parallel, handling dependencies through batching"""
+        # execute independent tasks in parallel, respecting dependencies
+
         if not tasks:
             return []
 
@@ -161,7 +162,8 @@ class OrchestrationEngine:
         agents: list[StatelessSubAgent],
         min_agreement: float = 0.66
     ) -> TaskResponse:
-        """Execute consensus pattern - multiple agents vote on result"""
+        # execute task with multiple agents and reach consensus
+
         # run same task through multiple agents
         responses = await asyncio.gather(*[
             agent.execute(task) for agent in agents
@@ -192,7 +194,8 @@ class OrchestrationEngine:
         return best_response
 
     def _group_by_dependency_level(self, tasks: list[TaskRequest]) -> list[list[TaskRequest]]:
-        """Group tasks by dependency level for batched execution"""
+        # group tasks by dependency level for batched execution
+
         # build dependency graph
         task_deps = {}
         task_map = {}
@@ -231,7 +234,8 @@ class OrchestrationEngine:
         task: TaskRequest,
         agents: dict[str, StatelessSubAgent]
     ) -> StatelessSubAgent:
-        """Select appropriate agent for task"""
+        # select appropriate agent for task
+
         # match by capability
         for agent in agents.values():
             if agent.capability and agent.capability.value == task.task_type:
@@ -246,7 +250,7 @@ class OrchestrationEngine:
         tasks: list[TaskRequest],
         agents: dict[str, StatelessSubAgent]
     ) -> list[TaskResponse]:
-        """Execute tasks using specified strategy"""
+        # eecute tasks using specified strategy
 
         logger.info("executing_strategy", strategy=strategy, task_count=len(tasks))
 

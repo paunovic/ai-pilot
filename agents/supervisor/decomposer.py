@@ -122,9 +122,8 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
 
     @staticmethod
     def has_circular_dependencies(dependency_graph: dict[str, list[str]]) -> bool:
-        """
-        Detect circular dependencies using depth-first search
-        """
+        # detect circular dependencies using depth-first search
+
         def has_cycle(node: str, visited: set[str], rec_stack: set[str]) -> bool:
             if node in rec_stack:
                 return True
@@ -153,9 +152,8 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
         objectives: list[str],
         dependency_graph: dict[str, list[str]]
     ) -> dict[str, list[str]]:
-        """
-        Validate and clean dependency graph
-        """
+        # validate and clean dependency graph
+
         valid_objectives = set(objectives)
         cleaned_graph = {}
 
@@ -174,9 +172,8 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
 
     @staticmethod
     def generate_execution_order(dependency_graph: dict[str, list[str]]) -> list[str]:
-        """
-        Generate topological sort for execution order
-        """
+        # generate topological sort for execution order
+
         from collections import deque, defaultdict
 
         # calculate in-degrees (how many dependencies each task has)
@@ -210,9 +207,7 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
         data: dict | list | None,
         analysis: TaskComplexityAnalysis | None = None
     ) -> tuple[ExecutionStrategy, list[TaskRequest]]:
-        """
-        Use LLM to decompose a complex task into subtasks with proper dependency analysis
-        """
+        # use LLM to decompose a complex task into subtasks with proper dependency analysis
 
         # step 1: decompose into subtasks
         decomposition_prompt = f"""

@@ -30,7 +30,8 @@ class TaskCache:
         self.max_memory_bytes = max_memory_mb * 1024 * 1024
 
     def _evict_if_needed(self):
-        """Evict oldest items if cache is too large"""
+        # evict oldest items if cache is too large
+
         # Check item count
         while len(self._cache) > self.max_items:
             self._cache.popitem(last=False)

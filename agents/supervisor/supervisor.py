@@ -39,7 +39,7 @@ class SupervisorAgent(BaseAgent):
         self.state_graph = self._build_state_graph()
 
     def _build_state_graph(self) -> StateGraph:
-        """Build LangGraph state machine for supervision flow"""
+        # build langgraph state machine for supervision
         workflow = StateGraph(dict)
 
         # define nodes
@@ -58,7 +58,8 @@ class SupervisorAgent(BaseAgent):
         return workflow.compile(checkpointer=MemorySaver())
 
     async def analyze_request(self, state: dict[str, Any]) -> dict[str, Any]:
-        """Analyze user request and determine approach"""
+        # analyze user request complexity and determine execution strategy
+
         user_request = state["user_request"]
 
         analysis_prompt = f"""
@@ -126,7 +127,8 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
         return state
 
     async def orchestrate_execution(self, state: dict[str, Any]) -> dict[str, Any]:
-        """Execute tasks using appropriate strategy"""
+        # execute tasks using appropriate strategy
+
         strategy = state["execution_strategy"]
         tasks = state["tasks"]
 
@@ -152,7 +154,8 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
         return state
 
     async def synthesize_results(self, state: dict[str, Any]) -> dict[str, Any]:
-        """Combine results from all subagents"""
+        # synthesize results from multiple tasks into final response
+
         responses = state["task_responses"]
 
         # extract successful results
@@ -205,7 +208,8 @@ Provide a comprehensive summary that addresses the original request."""
         return state
 
     async def execute(self, request: TaskRequest) -> TaskResponse:
-        """Execute complete supervision flow"""
+        # execute supervisor task
+
         trace = self._start_trace(request.task_id)
 
         supervisor_tokens = 0
