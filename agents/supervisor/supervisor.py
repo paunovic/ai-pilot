@@ -17,6 +17,10 @@ from agents.supervisor.model import (
 )
 from agents.supervisor.decomposer import TaskDecomposer
 from agents.supervisor.orchestrator import OrchestrationEngine
+from agents.utils import (
+    calculate_token_usage_cost,
+    extract_token_usage,
+)
 
 
 logger = structlog.get_logger()
@@ -87,15 +91,15 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
 
         logger.info("request_analysis", response=response)
 
-        token_usage = self._extract_token_usage(response["raw"])
-        cost = self._calculate_cost(
+        token_usage = extract_token_usage(response["raw"])
+        cost = calculate_token_usage_cost(
             token_usage["prompt_tokens"],
             token_usage["completion_tokens"],
             self.model_name,
         )
 
-        state["execution_metrics"]["supervisor_tokens"] = state["execution_metrics"]["supervisor_tokens"] + token_usage["total_tokens"]
-        state["execution_metrics"]["supervisor_cost"] = state["execution_metrics"]["supervisor_cost"] + cost
+        state["execution_metrics"]["supervisor"]["analysis_tokens"] = state["execution_metrics"]["supervisor"]["analysis_tokens"] + token_usage["total_tokens"]
+        state["execution_metrics"]["supervisor"]["analysis_cost"] = state["execution_metrics"]["supervisor"]["analysis_cost"] + cost
 
         state["analysis"] = response["parsed"]
 
@@ -111,6 +115,7 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
         strategy, tasks = await self.decomposer.decompose(
             llm=self.llm,
             objective=state["user_request"],
+            state=state,
             data=state["request_data"],
             analysis=state["analysis"],
         )
@@ -181,15 +186,15 @@ Provide a comprehensive summary that addresses the original request.
             synthesis_response = await self.llm.ainvoke([HumanMessage(content=synthesis_prompt)])
             state["final_response"] = synthesis_response.content
 
-            token_usage = self._extract_token_usage(synthesis_response)
-            cost = self._calculate_cost(
+            token_usage = extract_token_usage(synthesis_response)
+            cost = calculate_token_usage_cost(
                 token_usage["prompt_tokens"],
                 token_usage["completion_tokens"],
                 self.model_name,
             )
 
-            state["execution_metrics"]["supervisor_tokens"] = state["execution_metrics"]["supervisor_tokens"] + token_usage["total_tokens"]
-            state["execution_metrics"]["supervisor_cost"] = state["execution_metrics"]["supervisor_cost"] + cost
+            state["execution_metrics"]["supervisor"]["synthesis_tokens"] = state["execution_metrics"]["supervisor"]["synthesis_tokens"] + token_usage["total_tokens"]
+            state["execution_metrics"]["supervisor"]["synthesis_cost"] = state["execution_metrics"]["supervisor"]["synthesis_cost"] + cost
 
         elif results:
             state["final_response"] = results[0]
@@ -222,9 +227,17 @@ Provide a comprehensive summary that addresses the original request.
                 "user_request": request.objective,
                 "request_data": request.data,
                 "execution_metrics": {
-                    "supervisor_tokens": 0,
-                    "supervisor_cost": 0.0,
-                }
+                    "supervisor": {
+                        "analysis_tokens": 0,
+                        "analysis_cost": 0.0,
+                        "decomposition_tokens": 0,
+                        "decomposition_cost": 0.0,
+                        "orchestration_tokens": 0,
+                        "orchestration_cost": 0.0,
+                        "synthesis_tokens": 0,
+                        "synthesis_cost": 0.0,
+                    },
+                },
             }
 
             final_state = await self.state_graph.ainvoke(
@@ -246,8 +259,18 @@ Provide a comprehensive summary that addresses the original request.
                 }
             )
 
-            supervisor_tokens = final_state["execution_metrics"]["supervisor_tokens"]
-            supervisor_cost = final_state["execution_metrics"]["supervisor_cost"]
+            supervisor_tokens = (
+                final_state["execution_metrics"]["supervisor"]["analysis_tokens"]
+                + final_state["execution_metrics"]["supervisor"]["decomposition_tokens"]
+                + final_state["execution_metrics"]["supervisor"]["orchestration_tokens"]
+                + final_state["execution_metrics"]["supervisor"]["synthesis_tokens"]
+            )
+            supervisor_cost = (
+                final_state["execution_metrics"]["supervisor"]["analysis_cost"]
+                + final_state["execution_metrics"]["supervisor"]["decomposition_cost"]
+                + final_state["execution_metrics"]["supervisor"]["orchestration_cost"]
+                + final_state["execution_metrics"]["supervisor"]["synthesis_cost"]
+            )
 
             self._end_trace(trace, TaskStatus.COMPLETE, supervisor_tokens, supervisor_cost)
             return response

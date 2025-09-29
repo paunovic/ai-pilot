@@ -15,6 +15,10 @@ from agents.supervisor.model import (
     TaskComplexityAnalysis,
     TaskDecompositionAnalysis,
 )
+from agents.utils import (
+    calculate_token_usage_cost,
+    extract_token_usage,
+)
 
 logger = structlog.get_logger()
 
@@ -203,8 +207,9 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
     async def decompose(
         llm: Any,
         objective: str,
+        state: dict,
         data: dict | list | None,
-        analysis: TaskComplexityAnalysis | None = None
+        analysis: TaskComplexityAnalysis | None = None,
     ) -> tuple[ExecutionStrategy, list[TaskRequest]]:
         # use LLM to decompose a complex task into subtasks with proper dependency analysis
 
@@ -231,14 +236,24 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
 
         response = await (
             llm
-            .with_structured_output(SubtaskDecomposition)
+            .with_structured_output(SubtaskDecomposition, include_raw=True)
             .ainvoke([HumanMessage(content=decomposition_prompt)])
         )
 
         logger.debug("decomposition_response", response=response)
 
+        token_usage = extract_token_usage(response["raw"])
+        cost = calculate_token_usage_cost(
+            token_usage["prompt_tokens"],
+            token_usage["completion_tokens"],
+            llm.model,
+        )
+
+        state["execution_metrics"]["supervisor"]["decomposition_tokens"] = state["execution_metrics"]["supervisor"]["decomposition_tokens"] + token_usage["total_tokens"]
+        state["execution_metrics"]["supervisor"]["decomposition_cost"] = state["execution_metrics"]["supervisor"]["decomposition_cost"] + cost
+
         # step 2: extract objectives for dependency analysis
-        subtasks = response.subtasks
+        subtasks = response["parsed"].subtasks
         objectives = [subtask.objective for subtask in subtasks]
 
         # step 3: use analyze_dependencies to determine strategy and dependencies

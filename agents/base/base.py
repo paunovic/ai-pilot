@@ -15,8 +15,10 @@ from agents.base.model import (
     ExecutionTrace,
     AgentCapability,
 )
-
-import config
+from agents.utils import (
+    calculate_token_usage_cost,
+    extract_token_usage,
+)
 
 
 logger = structlog.get_logger()
@@ -68,29 +70,6 @@ class BaseAgent(ABC):
         trace.tokens_used = tokens
         trace.cost = cost
         trace.error = error
-
-    def _calculate_cost(self, input_tokens: int, output_tokens: int, model_name: str) -> float:
-        # calculate cost based on token usage and model pricing
-        model_pricing = config.MODEL_PRICING[model_name]
-        input_cost = (input_tokens / 1000) * model_pricing["input_cost_per_1k"]
-        output_cost = (output_tokens / 1000) * model_pricing["output_cost_per_1k"]
-        return input_cost + output_cost
-
-    def _extract_token_usage(self, response) -> dict[str, int]:
-        # extract token usage from LangChain response
-        metadata = response.response_metadata
-        usage = metadata["usage"]
-
-        token_usage: dict = {
-            "prompt_tokens": usage["input_tokens"],
-            "completion_tokens": usage["output_tokens"],
-            "total_tokens": usage.get(
-                "total_tokens",
-                usage["input_tokens"] + usage["output_tokens"],
-            ),
-        }
-
-        return token_usage
 
 
 class StatelessSubAgent(BaseAgent):
@@ -147,10 +126,10 @@ class StatelessSubAgent(BaseAgent):
                 confidence = response["parsed"].confidence
                 confidence_reasoning = response["parsed"].confidence_reasoning
 
-            token_usage: dict = self._extract_token_usage(response["raw"])
+            token_usage: dict = extract_token_usage(response["raw"])
 
             # calculate cost
-            cost: float = self._calculate_cost(
+            cost: float = calculate_token_usage_cost(
                 token_usage["prompt_tokens"],
                 token_usage["completion_tokens"],
                 self.model_name,
