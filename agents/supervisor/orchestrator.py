@@ -15,7 +15,6 @@ from agents.base.model import (
 logger = structlog.get_logger()
 
 
-
 class OrchestrationEngine:
     """Manages parallel and sequential execution of agents"""
 
