@@ -36,6 +36,7 @@ class ExecutionStrategy(str, Enum):
 
 class AgentCapability(str, Enum):
     """Agent specialized capabilities"""
+    SUPERVISOR = "supervisor"
     RESEARCH = "research"
     ANALYSIS = "analysis"
     SYNTHESIS = "synthesis"

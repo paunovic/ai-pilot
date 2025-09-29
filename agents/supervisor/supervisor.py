@@ -4,12 +4,16 @@ import json
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
+from agents.base.model import AgentCapability
 import structlog
 from agents.base.base import BaseAgent, StatelessSubAgent
 from agents.base.model import (
     TaskRequest,
     TaskResponse,
     TaskStatus,
+)
+from agents.supervisor.model import (
+    TaskComplexityAnalysis,
 )
 from agents.supervisor.decomposer import TaskDecomposer
 from agents.supervisor.orchestrator import OrchestrationEngine
@@ -24,10 +28,11 @@ class SupervisorAgent(BaseAgent):
     def __init__(
         self,
         name: str,
-        model: Any,
+        llm: Any,
         subagents: dict[str, StatelessSubAgent] | None = None
     ):
-        super().__init__(name, model)
+        super().__init__(name=name, capability=AgentCapability.SUPERVISOR, llm=llm, model_name=llm.model)
+
         self.subagents = subagents or {}
         self.orchestrator = OrchestrationEngine()
         self.decomposer = TaskDecomposer()
@@ -68,46 +73,37 @@ Consider:
 2. Are subtasks independent (parallel) or dependent (sequential)?
 3. Does this need consensus from multiple agents?
 4. Is this a large dataset needing map-reduce?
-
-You MUST respond ONLY with a structured JSON response with your results.
-Do NOT include any comments, newlines or trailing commas in the response JSON.
-Do NOT include any explanations outside the JSON, your response will be parsed programmatically with Python `json.loads()`.
-JSON response must not be pretty formatted.
-
-Format your response strictly as follows:
-{{
-    "complexity": "low|medium|high",
-    "requires_multiple_agents": true/false,
-    "preferred_strategy": "sequential|parallel|consensus",
-    "key_factors": ["list of key considerations"]
-}}
 """
 
         logger.info("analyzing_request", prompt=analysis_prompt)
 
-        response = await self.model.ainvoke([HumanMessage(content=analysis_prompt)])
+        response = await (
+            self.llm
+            .with_structured_output(TaskComplexityAnalysis, include_raw=True)
+            .ainvoke([HumanMessage(content=analysis_prompt)])
+        )
 
-        logger.info("request_analysis", response=response.content)
+        logger.info("request_analysis", response=response)
 
-        token_usage = self._extract_token_usage(response)
+        token_usage = self._extract_token_usage(response["raw"])
         cost = self._calculate_cost(
             token_usage["prompt_tokens"],
             token_usage["completion_tokens"],
-            self.model_name
+            self.model_name,
         )
 
         state["execution_metrics"]["supervisor_tokens"] = state["execution_metrics"]["supervisor_tokens"] + token_usage["total_tokens"]
         state["execution_metrics"]["supervisor_cost"] = state["execution_metrics"]["supervisor_cost"] + cost
 
-        analysis = json.loads(response.content)
-        state["analysis"] = analysis
+        state["analysis"] = response["parsed"]
 
         return state
 
     async def decompose_task(self, state: dict[str, Any]) -> dict[str, Any]:
-        """Decompose complex task into subtasks"""
+        # decompose complex task into subtasks
+
         strategy, tasks = await self.decomposer.decompose(
-            llm=self.model,
+            llm=self.llm,
             objective=state["user_request"],
             data=state["request_data"],
             analysis=state["analysis"],
@@ -172,14 +168,14 @@ Original request: {state['user_request']}
 
 Provide a comprehensive summary that addresses the original request."""
 
-            synthesis_response = await self.model.ainvoke([HumanMessage(content=synthesis_prompt)])
+            synthesis_response = await self.llm.ainvoke([HumanMessage(content=synthesis_prompt)])
             state["final_response"] = synthesis_response.content
 
             token_usage = self._extract_token_usage(synthesis_response)
             cost = self._calculate_cost(
                 token_usage["prompt_tokens"],
                 token_usage["completion_tokens"],
-                self.model_name
+                self.model_name,
             )
 
             state["execution_metrics"]["supervisor_tokens"] = state["execution_metrics"]["supervisor_tokens"] + token_usage["total_tokens"]

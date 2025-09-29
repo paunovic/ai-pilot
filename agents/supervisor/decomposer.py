@@ -9,6 +9,11 @@ from agents.base.model import (
     TaskPriority,
     ExecutionStrategy,
 )
+from agents.supervisor.model import (
+    SubtaskDecomposition,
+    TaskComplexityAnalysis,
+    TaskDecompositionAnalysis,
+)
 
 logger = structlog.get_logger()
 
@@ -57,31 +62,6 @@ Execution Strategies:
 - **parallel**: Tasks are independent and can run simultaneously
 - **consensus**: Same task needs multiple perspectives/validation
 
-You MUST respond with valid JSON only. No comments, explanations, or formatting outside the JSON.
-JSON response must be valid and parsable with Python `json.loads()`
-JSON response must not contain comments, newlines or trailing commas.
-JSON response must not be pretty formatted.
-
-Format your response as follows:
-
-{{
-    "strategy": "sequential|parallel|consensus",
-    "strategy_reasoning": "Brief explanation of why this strategy was chosen",
-    "dependency_graph": {{
-        "objective_1_text": ["list", "of", "prerequisite", "objective", "texts"],
-        "objective_2_text": [],
-        "objective_3_text": ["prerequisite_objective_text"]
-    }},
-    "confidence": 0.0-1.0,
-    "execution_order": ["objective_1_text", "objective_2_text", "objective_3_text"],
-    "parallel_groups": [
-        ["objective_1_text", "objective_2_text"],
-        ["objective_3_text"]
-    ],
-    "risk_factors": ["potential issues with this execution plan"],
-    "optimization_notes": ["suggestions for better execution"]
-}}
-
 Rules:
 - `dependency_graph` keys must exactly match the objective texts
 - Empty dependency list [] means no prerequisites
@@ -90,14 +70,17 @@ Rules:
 - Be conservative with parallelization if unsure about dependencies
     """
 
-        response = await llm.ainvoke([HumanMessage(content=dependency_analysis_prompt)])
+        response = await (
+            llm
+            .with_structured_output(TaskDecompositionAnalysis)
+            .ainvoke([HumanMessage(content=dependency_analysis_prompt)])
+        )
 
-        logger.info("dependency_analysis_response", response=response.content)
-        analysis = json.loads(response.content)
+        logger.info("dependency_analysis_response", response=response)
 
         # validate and extract results
-        strategy = ExecutionStrategy(analysis["strategy"])
-        dependency_graph = analysis["dependency_graph"]
+        strategy = ExecutionStrategy(response.strategy)
+        dependency_graph = response.dependency_graph
 
         # validate that all objectives are represented in dependency graph
         missing_objectives = set(objectives) - set(dependency_graph.keys())
@@ -122,8 +105,8 @@ Rules:
             strategy=strategy,
             total_objectives=len(objectives),
             has_dependencies=any(deps for deps in dependency_graph.values()),
-            confidence=analysis.get("confidence", 0.0),
-            reasoning=analysis.get("strategy_reasoning", "")
+            confidence=response.confidence,
+            reasoning=response.strategy_reasoning,
         )
 
         # additional validation for circular dependencies
@@ -223,7 +206,7 @@ Rules:
         llm: Any,
         objective: str,
         data: dict | list | None,
-        analysis: dict | list | None,
+        analysis: TaskComplexityAnalysis | None = None
     ) -> tuple[ExecutionStrategy, list[TaskRequest]]:
         """
         Use LLM to decompose a complex task into subtasks with proper dependency analysis
@@ -235,41 +218,27 @@ Don't go overboard though - keep subtasks focused and manageable.
 
 Task: {objective}
 Data: ```{json.dumps(data, indent=2) if data else "None"}```
-Analysis: ```{json.dumps(analysis, indent=2) if analysis else "None"}```
-
-Provide a JSON response with subtasks.
+Analysis: ```{analysis.model_dump_json() if analysis else "None"}```
 
 Rules:
 - Keep subtasks focused and atomic
 - Each subtask should have a clear, measurable objective
 - ALL relevant data MUST be passed to the subtask
-- JSON response must be valid and parsable with Python `json.loads()`
-- JSON response must not contain comments, newlines or trailing commas
-- JSON response must not be pretty formatted
-
-Format your response strictly as follows:
-{{
-    "subtasks": [
-        {{
-            "objective": "specific objective description",
-            "type": "research|analysis|synthesis|validation|generation",
-            "estimated_complexity": "low|medium|high",
-            "data": "all relevant data for this subtask or null"
-        }}
-    ]
-}}
     """
 
-        logger.info("decomposing_prompt", prompt=decomposition_prompt)
+        logger.debug("decomposing_prompt", prompt=decomposition_prompt)
 
-        response = await llm.ainvoke([HumanMessage(content=decomposition_prompt)])
+        response = await (
+            llm
+            .with_structured_output(SubtaskDecomposition)
+            .ainvoke([HumanMessage(content=decomposition_prompt)])
+        )
 
-        logger.debug("decomposition_response", response=response.content)
-        decomposition = json.loads(response.content)
+        logger.debug("decomposition_response", response=response)
 
         # step 2: extract objectives for dependency analysis
-        subtasks = decomposition["subtasks"]
-        objectives = [subtask["objective"] for subtask in subtasks]
+        subtasks = response.subtasks
+        objectives = [subtask.objective for subtask in subtasks]
 
         # step 3: use analyze_dependencies to determine strategy and dependencies
         strategy, dependency_graph = await TaskDecomposer.analyze_dependencies(
@@ -278,7 +247,7 @@ Format your response strictly as follows:
             context=f"Primary task: {objective}"
         )
 
-        logger.info(
+        logger.debug(
             "dependency_analysis_complete",
             strategy=strategy,
             dependencies=dependency_graph,
@@ -294,7 +263,7 @@ Format your response strictly as follows:
             ordered_subtasks = []
 
             # reorder subtasks based on dependency analysis
-            subtask_map = {st["objective"]: st for st in subtasks}
+            subtask_map = {st.objective: st for st in subtasks}
             for objective in execution_order:
                 if objective in subtask_map:
                     ordered_subtasks.append(subtask_map[objective])
@@ -309,7 +278,7 @@ Format your response strictly as follows:
         # step 5: create TaskRequest objects
         for i, subtask in enumerate(subtasks):
             # determine priority based on dependencies and complexity
-            priority = TaskPriority.HIGH if subtask["estimated_complexity"] == "high" else TaskPriority.MEDIUM
+            priority = TaskPriority.HIGH if subtask.estimated_complexity == "high" else TaskPriority.MEDIUM
 
             # for sequential execution, higher priority for earlier tasks
             if strategy == ExecutionStrategy.SEQUENTIAL and i < len(subtasks) // 2:
@@ -317,21 +286,17 @@ Format your response strictly as follows:
 
             # for parallel execution, critical priority if many dependencies
             elif strategy == ExecutionStrategy.PARALLEL:
-                deps_count = len(dependency_graph.get(subtask["objective"], []))
+                deps_count = len(dependency_graph.get(subtask.objective, []))
                 if deps_count > 0:
                     priority = TaskPriority.HIGH
 
-            if subtask_data := subtask.get("data"):
-                if not isinstance(subtask_data, (dict, list)):
-                    subtask_data = json.loads(subtask["data"])
-
             task_req = TaskRequest(
-                task_type=subtask["type"],
-                objective=subtask["objective"],
-                data=subtask_data,
+                task_type=subtask.type,
+                objective=subtask.objective,
+                data=subtask.data,
                 priority=priority,
                 constraints={
-                    "dependencies": dependency_graph.get(subtask["objective"], []),
+                    "dependencies": dependency_graph.get(subtask.objective, []),
                     "execution_strategy": strategy.value,
                     "position_in_sequence": i
                 }

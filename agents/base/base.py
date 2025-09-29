@@ -2,9 +2,11 @@ from abc import ABC, abstractmethod
 import arrow
 import json
 import time
+from typing import Any
 
 from langchain_core.messages import HumanMessage
 import structlog
+from langchain_core.messages import AIMessage
 from agents.base.cache import TaskCache
 from agents.base.model import (
     TaskRequest,
@@ -26,15 +28,15 @@ class BaseAgent(ABC):
     def __init__(
         self,
         name: str,
-        model,
-        capability: AgentCapability | None = None
+        capability: AgentCapability,
+        llm: Any,
+        model_name: str,
     ):
         self.name = name
         self.capability = capability
-        self.model = model
+        self.llm = llm
+        self.model_name = model_name
         self.execution_traces: list[ExecutionTrace] = []
-
-        self.model_name = self.model.model
 
     @abstractmethod
     async def execute(self, request: TaskRequest) -> TaskResponse:
@@ -98,10 +100,11 @@ class StatelessSubAgent(BaseAgent):
         self,
         name: str,
         capability: AgentCapability,
-        model,
+        llm: Any,
+        model_name: str,
         prompt_template: str,
     ):
-        super().__init__(name, model, capability)
+        super().__init__(name=name, capability=capability, llm=llm, model_name=model_name)
         self.prompt_template = prompt_template
         self.cache = TaskCache()
 
@@ -127,11 +130,24 @@ class StatelessSubAgent(BaseAgent):
 
             # execute
             start_time: float = time.time()
-            response = await self.model.ainvoke([HumanMessage(content=prompt)])
+            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
 
             processing_time: float = int((time.time() - start_time) * 1000)
 
-            token_usage: dict = self._extract_token_usage(response)
+            logger.info("subagent_llm_response", agent=self.name, response=response)
+
+            if isinstance(response, AIMessage):
+                response = {
+                    "raw": response,
+                    "parsed": json.loads(response.content)
+                }
+                confidence = response["parsed"]["confidence"]
+                confidence_reasoning = response["parsed"]["confidence_reasoning"]
+            else:
+                confidence = response["parsed"].confidence
+                confidence_reasoning = response["parsed"].confidence_reasoning
+
+            token_usage: dict = self._extract_token_usage(response["raw"])
 
             # calculate cost
             cost: float = self._calculate_cost(
@@ -140,17 +156,14 @@ class StatelessSubAgent(BaseAgent):
                 self.model_name,
             )
 
-            # parse response to structured format
-            result = json.loads(response.content)
-
             # build response
             task_response = TaskResponse(
                 task_id=request.task_id,
                 status=TaskStatus.COMPLETE,
-                result=result,
+                result=response["parsed"],
                 processing_time_ms=processing_time,
-                confidence=result["confidence"],
-                confidence_reasoning=result.get("confidence_reasoning"),
+                confidence=confidence,
+                confidence_reasoning=confidence_reasoning,
                 tokens_used=token_usage["total_tokens"],
                 cost=cost,
                 metadata={
@@ -158,7 +171,7 @@ class StatelessSubAgent(BaseAgent):
                     "capability": self.capability,
                 },
             )
-            logger.debug("subagent_response", agent=self.name, response=task_response.to_json(), cost=cost)
+            logger.debug("subagent_response", agent=self.name, response=task_response.model_dump_json(), cost=cost)
 
             # cache result
             self.cache.set(request, task_response)
@@ -167,12 +180,7 @@ class StatelessSubAgent(BaseAgent):
             return task_response
 
         except Exception as e:
-            logger.error(
-                "subagent_error",
-                agent=self.name,
-                error=str(e),
-                subagent_raw_response=response.content if "response" in locals() else None,
-            )
+            logger.error("subagent_error", agent=self.name, error=str(e))
             self._end_trace(trace, TaskStatus.FAILED, 0, 0.0, str(e))
 
             return TaskResponse(

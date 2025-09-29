@@ -1,6 +1,8 @@
 import asyncio
+from typing import Annotated
 
 from llm import llm
+from pydantic import BaseModel
 from agents.base.base import StatelessSubAgent
 from agents.base.model import (
     TaskRequest,
@@ -57,48 +59,40 @@ logger = structlog.get_logger()
 async def create_specialized_agents() -> dict[str, StatelessSubAgent]:
     """Create specialized subagents"""
 
+    class ResearchAgentOutput(BaseModel):
+        """Schema for research agent output"""
+
+        findings: list[str]
+        sources: list[str]
+        confidence: Annotated[float, "0.0-1.0"]
+        confidence_reasoning: str | None
+
     research_agent = StatelessSubAgent(
         name="ResearchAgent",
         capability=AgentCapability.RESEARCH,
-        model=llm,
+        llm=llm.with_structured_output(ResearchAgentOutput, include_raw=True),
+        model_name=llm.model,
         prompt_template="""
 You are an extremely correct and diligent specialized research agent.
+Your goal is to gather accurate and relevant information to help complete the task.
+Research thoroughly and accurately using the provided data.
 
 Task: {objective}
 Data to research: ```{data}```
 
-You MUST respond ONLY with a structured JSON response with your research results.
-Do NOT include any comments, newlines or trailing commas in the response JSON.
-Do NOT include any explanations outside the JSON, your response will be parsed programmatically with Python `json.loads()`.
-JSON response must be valid and parsable with Python `json.loads()`
-JSON response must not contain comments, newlines or trailing commas.
-JSON response must not be pretty formatted.
-
-JSON MUST include a "confidence" field (0.0 to 1.0) indicating how confident you are in your research results.
 Consider factors like:
 - Completeness of available data
 - Clarity of the task
 - Quality of your findings/research
 - Any uncertainties or assumptions made
-
-If applicable, also include a "confidence_reasoning" field explaining your confidence level.
-
-Research relevant information and return as JSON strictly following the following format:
-{{
-    "findings": [...],
-    "sources": [...],
-    "confidence": 0.0-1.0
-    "confidence_reasoning": "explanation of confidence level"
-}}
-
-`...` indicates items and should be filled accordingly.
 """
     )
 
     analysis_agent = StatelessSubAgent(
         name="AnalysisAgent",
         capability=AgentCapability.ANALYSIS,
-        model=llm,
+        llm=llm,
+        model_name=llm.model,
         prompt_template="""
 You are an extremely correct and diligent specialized analysis agent.
 
@@ -137,7 +131,8 @@ Analyze relevant information and return as JSON strictly following the following
     synthesis_agent = StatelessSubAgent(
         name="SynthesisAgent",
         capability=AgentCapability.SYNTHESIS,
-        model=llm,
+        llm=llm,
+        model_name=llm.model,
         prompt_template="""
 You are an extremely correct and diligent specialized data synthesis agent.
 
@@ -176,7 +171,8 @@ Analyze relevant information and return as JSON strictly following the following
     validation_agent = StatelessSubAgent(
         name="ValidationAgent",
         capability=AgentCapability.VALIDATION,
-        model=llm,
+        llm=llm,
+        model_name=llm.model,
         prompt_template="""
 You are an extremely correct and diligent validation agent.
 
@@ -230,7 +226,7 @@ async def main():
     supervisor = SupervisorAgent(
         name="SupervisorAgent",
         subagents=agents,
-        model=llm,
+        llm=llm,
     )
 
     # example 1: complex task that needs decomposition
