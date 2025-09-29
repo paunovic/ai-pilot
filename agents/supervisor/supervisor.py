@@ -89,6 +89,16 @@ Format your response strictly as follows:
 
         logger.info("request_analysis", response=response.content)
 
+        token_usage = self._extract_token_usage(response)
+        cost = self._calculate_cost(
+            token_usage["prompt_tokens"],
+            token_usage["completion_tokens"],
+            self.model_name
+        )
+
+        state["execution_metrics"]["supervisor_tokens"] = state["execution_metrics"]["supervisor_tokens"] + token_usage["total_tokens"]
+        state["execution_metrics"]["supervisor_cost"] = state["execution_metrics"]["supervisor_cost"] + cost
+
         analysis = json.loads(response.content)
         state["analysis"] = analysis
 
@@ -154,7 +164,7 @@ Format your response strictly as follows:
 
         # use LLM to synthesize if multiple results
         if len(results) > 1:
-            synthesis_prompt = f"""Synthesize these results into a coherent response:
+            synthesis_prompt = f"""You are extremely correct and diligent at synthesizing information from multiple sources into a coherent, concise summary.
 
 Results: {json.dumps(results, indent=2)}
 
@@ -162,8 +172,19 @@ Original request: {state['user_request']}
 
 Provide a comprehensive summary that addresses the original request."""
 
-            synthesis = await self.model.ainvoke([HumanMessage(content=synthesis_prompt)])
-            state["final_response"] = synthesis.content
+            synthesis_response = await self.model.ainvoke([HumanMessage(content=synthesis_prompt)])
+            state["final_response"] = synthesis_response.content
+
+            token_usage = self._extract_token_usage(synthesis_response)
+            cost = self._calculate_cost(
+                token_usage["prompt_tokens"],
+                token_usage["completion_tokens"],
+                self.model_name
+            )
+
+            state["execution_metrics"]["supervisor_tokens"] = state["execution_metrics"]["supervisor_tokens"] + token_usage["total_tokens"]
+            state["execution_metrics"]["supervisor_cost"] = state["execution_metrics"]["supervisor_cost"] + cost
+
         elif results:
             state["final_response"] = results[0]
         else:
@@ -174,12 +195,10 @@ Provide a comprehensive summary that addresses the original request."""
         total_tokens = sum(r.tokens_used for r in responses)
         total_cost = sum(r.cost for r in responses)
 
-        state["execution_metrics"] = {
-            "total_time_ms": total_time,
-            "total_tokens": total_tokens,
-            "total_cost": total_cost,
-            "task_count": len(responses)
-        }
+        state["execution_metrics"]["total_time_ms"] = total_time
+        state["execution_metrics"]["task_tokens"] = total_tokens
+        state["execution_metrics"]["task_cost"] = total_cost
+        state["execution_metrics"]["task_count"] = len(responses)
 
         return state
 
@@ -187,30 +206,45 @@ Provide a comprehensive summary that addresses the original request."""
         """Execute complete supervision flow"""
         trace = self._start_trace(request.task_id)
 
-        # run through state graph
-        initial_state = {
-            "user_request": request.objective,
-            "request_data": request.data,
-        }
+        supervisor_tokens = 0
+        supervisor_cost = 0.0
 
-        final_state = await self.state_graph.ainvoke(
-            initial_state,
-            config={"configurable": {"thread_id": request.task_id}}
-        )
-
-        # build response
-        response = TaskResponse(
-            task_id=request.task_id,
-            status=TaskStatus.COMPLETE,
-            result={
-                "response": final_state.get("final_response"),
-                "metrics": final_state.get("execution_metrics")
-            },
-            metadata={
-                "strategy": final_state.get("execution_strategy"),
-                "task_count": len(final_state.get("tasks", []))
+        try:
+            # run through state graph
+            initial_state = {
+                "user_request": request.objective,
+                "request_data": request.data,
+                "execution_metrics": {
+                    "supervisor_tokens": 0,
+                    "supervisor_cost": 0.0,
+                }
             }
-        )
 
-        self._end_trace(trace, TaskStatus.COMPLETE)
-        return response
+            final_state = await self.state_graph.ainvoke(
+                initial_state,
+                config={"configurable": {"thread_id": request.task_id}}
+            )
+
+            # build response
+            response = TaskResponse(
+                task_id=request.task_id,
+                status=TaskStatus.COMPLETE,
+                result={
+                    "response": final_state["final_response"],
+                    "execution_metrics": final_state["execution_metrics"],
+                },
+                metadata={
+                    "strategy": final_state["execution_strategy"],
+                    "task_count": len(final_state["tasks"]),
+                }
+            )
+
+            supervisor_tokens = final_state["execution_metrics"]["supervisor_tokens"]
+            supervisor_cost = final_state["execution_metrics"]["supervisor_cost"]
+
+            self._end_trace(trace, TaskStatus.COMPLETE, supervisor_tokens, supervisor_cost)
+            return response
+        except Exception as e:
+            logger.error("supervisor_execution_failed", error=str(e), traceback=True)
+            self._end_trace(trace, TaskStatus.FAILED, supervisor_tokens, supervisor_cost, str(e))
+            raise
