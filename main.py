@@ -2,7 +2,7 @@ import asyncio
 from typing import Annotated
 
 from llm import llm
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from agents.base.base import StatelessSubAgent
 from agents.base.model import (
     TaskRequest,
@@ -62,10 +62,11 @@ async def create_specialized_agents() -> dict[str, StatelessSubAgent]:
     class ResearchAgentOutput(BaseModel):
         """Schema for research agent output"""
 
-        findings: list[str]
-        sources: list[str]
-        confidence: Annotated[float, "0.0-1.0"]
-        confidence_reasoning: str | None
+        findings: list[str] = Field(description="List of research findings. Each finding should be a separate string in the list.")
+        sources: list[str] = Field(description="List of sources used. Each source should be a separate string in the list.")
+        confidence: Annotated[float, Field(ge=0.0, le=1.0, description="Confidence level between 0.0 and 1.0")]
+        confidence_reasoning: str = Field(description="Explanation for the confidence level")
+
 
     research_agent = StatelessSubAgent(
         name="ResearchAgent",
@@ -80,11 +81,22 @@ Research thoroughly and accurately using the provided data.
 Task: {objective}
 Data to research: ```{data}```
 
+IMPORTANT: You must return your findings and sources as LISTS where each item is a separate string.
+For example:
+- findings should be ["finding 1", "finding 2", "finding 3"] NOT a single string with bullet points
+- sources should be ["source 1", "source 2", "source 3"] NOT a single string
+
 Consider factors like:
 - Completeness of available data
 - Clarity of the task
 - Quality of your findings/research
 - Any uncertainties or assumptions made
+
+Return a structured response with:
+- findings: A list of strings, each string is one finding
+- sources: A list of strings, each string is one source
+- confidence: A number between 0.0 and 1.0
+- confidence_reasoning: An explanation of your confidence level
 """
     )
 
@@ -248,25 +260,25 @@ async def main():
     print(f"Status: {response.status}")
     print(response.result["response"])
 
-    # # example 2: parallel execution scenario
-    # parallel_request = TaskRequest(
-    #     task_type="multi_competitor_analysis",
-    #     objective="Research pricing for competitors A, B, C simultaneously",
-    #     data={
-    #         "competitors": ["CompetitorA", "CompetitorB", "CompetitorC"],
-    #         "prices": {
-    #             "CompetitorA": "3.44, 4.99, 5.99",
-    #             "CompetitorB": "2.99, 4.49, 6.49",
-    #             "CompetitorC": "3.29, 5.29, 6.99",
-    #         },
-    #     },
-    # )
+    # example 2: parallel execution scenario
+    parallel_request = TaskRequest(
+        task_type="multi_competitor_analysis",
+        objective="Research pricing for competitors A, B, C simultaneously",
+        data={
+            "competitors": ["CompetitorA", "CompetitorB", "CompetitorC"],
+            "prices": {
+                "CompetitorA": "3.44, 4.99, 5.99",
+                "CompetitorB": "2.99, 4.49, 6.49",
+                "CompetitorC": "3.29, 5.29, 6.99",
+            },
+        },
+    )
 
-    # print("\nExecuting parallel research task...")
-    # response = await supervisor.execute(parallel_request)
-    # print(f"Execution strategy: {response.metadata.get('strategy')}")
-    # print(f"Status: {response.status}")
-    # print(response.result["response"])
+    print("\nExecuting parallel research task...")
+    response = await supervisor.execute(parallel_request)
+    print(f"Execution strategy: {response.metadata.get('strategy')}")
+    print(f"Status: {response.status}")
+    print(response.result["response"])
 
     # print execution traces
     print("\n=== Execution Summary ===")
