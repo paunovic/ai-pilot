@@ -83,7 +83,7 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
             .ainvoke([HumanMessage(content=dependency_analysis_prompt)])
         )
 
-        logger.info("dependency_analysis_response", response=response)
+        logger.debug("dependency_analysis_response", response=response)
 
         # validate and extract results
         strategy = ExecutionStrategy(response.strategy)
@@ -107,7 +107,7 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
                 dependency_graph[obj] = [dep for dep in deps if dep in valid_objectives]
 
         # log analysis results for monitoring
-        logger.info(
+        logger.debug(
             "dependency_analysis_complete",
             strategy=strategy,
             total_objectives=len(objectives),
@@ -319,7 +319,7 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
             )
             tasks.append(task_req)
 
-        logger.info(
+        logger.debug(
             "task_decomposition_complete",
             strategy=strategy,
             task_count=len(tasks),

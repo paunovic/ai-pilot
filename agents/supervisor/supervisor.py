@@ -89,7 +89,7 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
             .ainvoke([HumanMessage(content=analysis_prompt)])
         )
 
-        logger.info("request_analysis", response=response)
+        logger.debug("request_analysis", response=response)
 
         token_usage = extract_token_usage(response["raw"])
         cost = calculate_token_usage_cost(
@@ -103,14 +103,12 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
 
         state["analysis"] = response["parsed"]
 
-        logger.info("analysis_complete", state=state)
+        logger.info("analysis_complete", analysis=state["analysis"].model_dump())
 
         return state
 
     async def decompose_task(self, state: dict[str, Any]) -> dict[str, Any]:
         # decompose complex task into subtasks
-
-        logger.info(f"state before decompose: {state}")
 
         strategy, tasks = await self.decomposer.decompose(
             llm=self.llm,

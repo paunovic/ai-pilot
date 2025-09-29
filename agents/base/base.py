@@ -105,7 +105,7 @@ class StatelessSubAgent(BaseAgent):
                 data=json.dumps(request.data) if request.data else None,
                 constraints=json.dumps(request.constraints) if request.constraints else None,
             )
-            logger.debug("subagent_prompt", agent=self.name, prompt=prompt)
+            logger.info("subagent_prompt", agent=self.name, prompt=prompt)
 
             # execute
             start_time: float = time.time()
@@ -113,7 +113,7 @@ class StatelessSubAgent(BaseAgent):
 
             processing_time: float = int((time.time() - start_time) * 1000)
 
-            logger.info("subagent_llm_response", agent=self.name, response=response)
+            logger.debug("subagent_llm_response", agent=self.name, response=response)
 
             if isinstance(response, AIMessage):
                 response = {
@@ -150,7 +150,7 @@ class StatelessSubAgent(BaseAgent):
                     "capability": self.capability,
                 },
             )
-            logger.debug("subagent_response", agent=self.name, response=task_response.model_dump_json(), cost=cost)
+            logger.info("subagent_response", agent=self.name, response=task_response.model_dump_json(), cost=cost)
 
             # cache result
             self.cache.set(request, task_response)
