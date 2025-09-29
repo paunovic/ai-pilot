@@ -175,7 +175,8 @@ Results: {json.dumps(results, indent=2)}
 
 Original request: {state['user_request']}
 
-Provide a comprehensive summary that addresses the original request."""
+Provide a comprehensive summary that addresses the original request.
+"""
 
             synthesis_response = await self.llm.ainvoke([HumanMessage(content=synthesis_prompt)])
             state["final_response"] = synthesis_response.content

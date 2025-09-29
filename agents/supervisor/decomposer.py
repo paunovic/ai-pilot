@@ -1,3 +1,4 @@
+from collections import deque, defaultdict
 from typing import Any
 import json
 
@@ -173,8 +174,6 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
     @staticmethod
     def generate_execution_order(dependency_graph: dict[str, list[str]]) -> list[str]:
         # generate topological sort for execution order
-
-        from collections import deque, defaultdict
 
         # calculate in-degrees (how many dependencies each task has)
         in_degree = defaultdict(int)
