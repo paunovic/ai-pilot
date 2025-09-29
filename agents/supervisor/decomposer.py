@@ -69,7 +69,7 @@ Rules:
 - `parallel_groups` groups tasks that can run simultaneously
 - Be conservative with parallelization if unsure about dependencies
 
-IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MUST respond ONLY with a structured JSON response that is compatible with Pydantic.
+IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MUST respond ONLY with a structured response that is compatible with Pydantic.
     """
 
         response = await (
@@ -230,7 +230,7 @@ Rules that you MUST folow no matter what:
 - ALL relevant data MUST BE included in the subtask data field
 - DO NOT assume subtask have access to data outside of what you provide
 
-IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MUST respond ONLY with a structured JSON response that is compatible with Pydantic.
+IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MUST respond ONLY with a structured response that is compatible with Pydantic.
     """
 
         logger.debug("decomposing_prompt", prompt=decomposition_prompt)

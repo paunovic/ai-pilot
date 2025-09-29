@@ -81,7 +81,7 @@ Research thoroughly and accurately using the provided data.
 Task: {objective}
 Data to research: ```{data}```
 
-IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MUST respond ONLY with a structured JSON response that is compatible with Pydantic.
+IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MUST respond ONLY with a structured response that is compatible with Pydantic.
 
 For example:
 - findings should be ["finding 1", "finding 2", "finding 3"] NOT a single string with bullet points
@@ -224,43 +224,43 @@ async def main():
         llm=llm,
     )
 
-    # # example 1: complex task that needs decomposition
-    # complex_request = TaskRequest(
-    #     task_type="comprehensive_analysis",
-    #     objective="Analyze customer feedback for Q3, identify top issues, and generate recommendations",
-    #     data={
-    #         "feedback_items": [
-    #             {"id": 1, "text": "App is slow on Android", "rating": 2},
-    #             {"id": 2, "text": "Love the new features", "rating": 5},
-    #             {"id": 3, "text": "Crashes frequently", "rating": 1},
-    #         ],
-    #     },
-    #     priority=TaskPriority.HIGH,
-    # )
+    # example 1: complex task that needs decomposition
+    complex_request = TaskRequest(
+        task_type="comprehensive_analysis",
+        objective="Analyze customer feedback for Q3, identify top issues, and generate recommendations",
+        data={
+            "feedback_items": [
+                {"id": 1, "text": "App is slow on Android", "rating": 2},
+                {"id": 2, "text": "Love the new features", "rating": 5},
+                {"id": 3, "text": "Crashes frequently", "rating": 1},
+            ],
+        },
+        priority=TaskPriority.HIGH,
+    )
 
-    # print("Executing complex analysis task...")
-    # response = await supervisor.execute(complex_request)
-    # print(f"Status: {response.status}")
-    # print(response.result["response"])
+    print("Executing complex analysis task...")
+    response = await supervisor.execute(complex_request)
+    print(f"Status: {response.status}")
+    print(response.result["response"])
 
-    # # example 1: pull from cache
-    # complex_request = TaskRequest(
-    #     task_type="comprehensive_analysis",
-    #     objective="Analyze customer feedback for Q3, identify top issues, and generate recommendations",
-    #     data={
-    #         "feedback_items": [
-    #             {"id": 1, "text": "App is slow on Android", "rating": 2},
-    #             {"id": 2, "text": "Love the new features", "rating": 5},
-    #             {"id": 3, "text": "Crashes frequently", "rating": 1},
-    #         ],
-    #     },
-    #     priority=TaskPriority.HIGH,
-    # )
+    # example 1: pull from cache
+    complex_request = TaskRequest(
+        task_type="comprehensive_analysis",
+        objective="Analyze customer feedback for Q3, identify top issues, and generate recommendations",
+        data={
+            "feedback_items": [
+                {"id": 1, "text": "App is slow on Android", "rating": 2},
+                {"id": 2, "text": "Love the new features", "rating": 5},
+                {"id": 3, "text": "Crashes frequently", "rating": 1},
+            ],
+        },
+        priority=TaskPriority.HIGH,
+    )
 
-    # print("Executing complex analysis task...")
-    # response = await supervisor.execute(complex_request)
-    # print(f"Status: {response.status}")
-    # print(response.result["response"])
+    print("Executing complex analysis task...")
+    response = await supervisor.execute(complex_request)
+    print(f"Status: {response.status}")
+    print(response.result["response"])
 
     # example 2: parallel execution scenario
     parallel_request = TaskRequest(
