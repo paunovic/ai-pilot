@@ -249,8 +249,14 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
             llm.model,
         )
 
-        state["execution_metrics"]["supervisor"]["decomposition_tokens"] = state["execution_metrics"]["supervisor"]["decomposition_tokens"] + token_usage["total_tokens"]
-        state["execution_metrics"]["supervisor"]["decomposition_cost"] = state["execution_metrics"]["supervisor"]["decomposition_cost"] + cost
+        state["execution_metrics"]["supervisor"]["decomposition_tokens"] = (
+            state["execution_metrics"]["supervisor"]["decomposition_tokens"]
+            + token_usage["total_tokens"]
+        )
+        state["execution_metrics"]["supervisor"]["decomposition_cost"] = (
+            state["execution_metrics"]["supervisor"]["decomposition_cost"]
+            + cost
+        )
 
         # step 2: extract objectives for dependency analysis
         subtasks = response["parsed"].subtasks
@@ -292,16 +298,12 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
             subtasks = ordered_subtasks
 
         # step 5: create TaskRequest objects
-        for i, subtask in enumerate(subtasks):
+        for index, subtask in enumerate(subtasks):
             # determine priority based on dependencies and complexity
             priority = TaskPriority.HIGH if subtask.estimated_complexity == "high" else TaskPriority.MEDIUM
 
-            # for sequential execution, higher priority for earlier tasks
-            if strategy == ExecutionStrategy.SEQUENTIAL and i < len(subtasks) // 2:
-                priority = TaskPriority.HIGH
-
-            # for parallel execution, critical priority if many dependencies
-            elif strategy == ExecutionStrategy.PARALLEL:
+            # for parallel execution, high priority if many dependencies
+            if strategy == ExecutionStrategy.PARALLEL:
                 deps_count = len(dependency_graph.get(subtask.objective, []))
                 if deps_count > 0:
                     priority = TaskPriority.HIGH
@@ -314,8 +316,8 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
                 constraints={
                     "dependencies": dependency_graph.get(subtask.objective, []),
                     "execution_strategy": strategy.value,
-                    "position_in_sequence": i
-                }
+                    "position_in_sequence": index,
+                },
             )
             tasks.append(task_req)
 

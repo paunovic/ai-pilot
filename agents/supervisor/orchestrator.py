@@ -38,56 +38,59 @@ class OrchestrationEngine:
         responses = []
         completed_tasks = set()
         task_results = {}  # store results for dependent tasks
+        halt_execution = False
 
-        for task in tasks:
-            # check if dependencies are satisfied
-            dependencies = task.constraints.get("dependencies", [])
-            unsatisfied_deps = [dep for dep in dependencies if dep not in completed_tasks]
+        while not halt_execution and len(task_results) != len(tasks):
+            for task in tasks:
+                # check if dependencies are satisfied
+                dependencies = task.constraints.get("dependencies", [])
+                unsatisfied_deps = [dep for dep in dependencies if dep not in completed_tasks]
 
-            if unsatisfied_deps:
-                logger.warning(
-                    "dependency_not_satisfied",
+                if unsatisfied_deps:
+                    logger.warning(
+                        "dependency_not_satisfied",
+                        task_id=task.task_id,
+                        missing=unsatisfied_deps
+                    )
+                    continue
+
+                # add results from previous tasks to current task's data
+                if dependencies and task_results:
+                    dependency_data = {
+                        dep: task_results.get(dep)
+                        for dep in dependencies
+                        if dep in task_results
+                    }
+                    if task.data is None:
+                        task.data = {}
+                    task.data["dependency_results"] = dependency_data
+
+                agent = self._select_agent(task, agents)
+                response = await agent.execute(task)
+                responses.append(response)
+
+                # track completion and store results
+                if response.status == TaskStatus.COMPLETE:
+                    completed_tasks.add(task.objective)
+                    task_results[task.objective] = response.result
+
+                logger.info(
+                    "sequential_task_complete",
                     task_id=task.task_id,
-                    missing=unsatisfied_deps
+                    status=response.status,
+                    agent=agent.name,
+                    dependencies_satisfied=len(dependencies) - len(unsatisfied_deps)
                 )
-                # could implement waiting/retry logic here
 
-            # add results from previous tasks to current task's data
-            if dependencies and task_results:
-                dependency_data = {
-                    dep: task_results.get(dep)
-                    for dep in dependencies
-                    if dep in task_results
-                }
-                if task.data is None:
-                    task.data = {}
-                task.data["dependency_results"] = dependency_data
-
-            agent = self._select_agent(task, agents)
-            response = await agent.execute(task)
-            responses.append(response)
-
-            # track completion and store results
-            if response.status == TaskStatus.COMPLETE:
-                completed_tasks.add(task.objective)
-                task_results[task.objective] = response.result
-
-            logger.info(
-                "sequential_task_complete",
-                task_id=task.task_id,
-                status=response.status,
-                agent=agent.name,
-                dependencies_satisfied=len(dependencies) - len(unsatisfied_deps)
-            )
-
-            # if task failed, halt further execution
-            if response.status == TaskStatus.FAILED:
-                logger.error(
-                    "sequential_execution_halted",
-                    task_id=task.task_id,
-                    reason=response.error
-                )
-                break
+                # if task failed, halt further execution
+                if response.status == TaskStatus.FAILED:
+                    logger.error(
+                        "sequential_execution_halted",
+                        task_id=task.task_id,
+                        reason=response.error
+                    )
+                    halt_execution = True
+                    break
 
         return responses
 

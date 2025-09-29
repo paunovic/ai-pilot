@@ -8,5 +8,5 @@ llm = init_chat_model(
     model="claude-3-haiku-20240307",
     model_provider="anthropic",
     temperature=0,
-    max_tokens=1024,
+    max_tokens=4096,
 )
