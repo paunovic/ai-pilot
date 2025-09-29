@@ -21,8 +21,14 @@ class OrchestrationEngine:
 
     def __init__(self, max_parallel: int = 10):
         self.max_parallel = max_parallel
-        self.executor = ThreadPoolExecutor(max_workers=max_parallel)
         self.execution_history: list[dict[str, Any]] = []
+
+    async def __aenter__(self):
+        self.executor = ThreadPoolExecutor(max_workers=self.max_parallel)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.executor.shutdown(wait=True)
 
     async def execute_sequential(
         self,
