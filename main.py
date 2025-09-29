@@ -260,6 +260,25 @@ async def main():
     print(f"Status: {response.status}")
     print(response.result["response"])
 
+    # example 1: pull from cache
+    complex_request = TaskRequest(
+        task_type="comprehensive_analysis",
+        objective="Analyze customer feedback for Q3, identify top issues, and generate recommendations",
+        data={
+            "feedback_items": [
+                {"id": 1, "text": "App is slow on Android", "rating": 2},
+                {"id": 2, "text": "Love the new features", "rating": 5},
+                {"id": 3, "text": "Crashes frequently", "rating": 1},
+            ],
+        },
+        priority=TaskPriority.HIGH,
+    )
+
+    print("Executing complex analysis task...")
+    response = await supervisor.execute(complex_request)
+    print(f"Status: {response.status}")
+    print(response.result["response"])
+
     # example 2: parallel execution scenario
     parallel_request = TaskRequest(
         task_type="multi_competitor_analysis",
@@ -286,7 +305,7 @@ async def main():
         if agent.execution_traces:
             print(f"\n{agent_name}:")
             for trace in agent.execution_traces[-3:]:  # last 3 traces
-                print(f"  Task {trace.task_id[:8]}: {trace.status} ({trace.duration_ms}ms, {trace.tokens_used} tokens, ${trace.cost:.4f})")
+                print(f"  Task {trace.task_id}: {trace.status} ({trace.duration_ms}ms, {trace.tokens_used} tokens, ${trace.cost:.4f})")
 
 
 if __name__ == "__main__":
