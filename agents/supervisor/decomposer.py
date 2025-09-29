@@ -18,8 +18,8 @@ class TaskDecomposer:
 
     @staticmethod
     async def analyze_dependencies(
-        objectives: list[str],
         llm: Any,
+        objectives: list[str],
         context: str | None = None
     ) -> tuple[ExecutionStrategy, dict[str, list[str]]]:
         """
@@ -135,7 +135,6 @@ Rules:
 
         return strategy, dependency_graph
 
-
     @staticmethod
     def has_circular_dependencies(dependency_graph: dict[str, list[str]]) -> bool:
         """
@@ -163,7 +162,6 @@ Rules:
                 if has_cycle(node, visited, set()):
                     return True
         return False
-
 
     def _validate_dependency_graph(
         self,
@@ -275,8 +273,8 @@ Format your response strictly as follows:
 
         # step 3: use analyze_dependencies to determine strategy and dependencies
         strategy, dependency_graph = await TaskDecomposer.analyze_dependencies(
-            objectives=objectives,
             llm=llm,
+            objectives=objectives,
             context=f"Primary task: {objective}"
         )
 

@@ -3,7 +3,6 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 import structlog
-import colorama
 
 from agents.base.base import StatelessSubAgent
 from agents.base.model import (
@@ -75,6 +74,15 @@ class OrchestrationEngine:
                 agent=agent.name,
                 dependencies_satisfied=len(dependencies) - len(unsatisfied_deps)
             )
+
+            # if task failed, halt further execution
+            if response.status == TaskStatus.FAILED:
+                logger.error(
+                    "sequential_execution_halted",
+                    task_id=task.task_id,
+                    reason=response.error
+                )
+                break
 
         return responses
 

@@ -14,6 +14,8 @@ from agents.base.model import (
     AgentCapability,
 )
 
+import config
+
 
 logger = structlog.get_logger()
 
@@ -31,6 +33,8 @@ class BaseAgent(ABC):
         self.capability = capability
         self.model = model
         self.execution_traces: list[ExecutionTrace] = []
+
+        self.model_name = self.model.model
 
     @abstractmethod
     async def execute(self, request: TaskRequest) -> TaskResponse:
@@ -63,6 +67,29 @@ class BaseAgent(ABC):
         trace.cost = cost
         trace.error = error
 
+    def _calculate_cost(self, input_tokens: int, output_tokens: int, model_name: str) -> float:
+        # calculate cost based on token usage and model pricing
+        model_pricing = config.MODEL_PRICING[model_name]
+        input_cost = (input_tokens / 1000) * model_pricing["input_cost_per_1k"]
+        output_cost = (output_tokens / 1000) * model_pricing["output_cost_per_1k"]
+        return input_cost + output_cost
+
+    def _extract_token_usage(self, response) -> dict[str, int]:
+        # extract token usage from LangChain response
+        metadata = response.response_metadata
+        usage = metadata["usage"]
+
+        token_usage: dict = {
+            "prompt_tokens": usage["input_tokens"],
+            "completion_tokens": usage["output_tokens"],
+            "total_tokens": usage.get(
+                "total_tokens",
+                usage["input_tokens"] + usage["output_tokens"],
+            ),
+        }
+
+        return token_usage
+
 
 class StatelessSubAgent(BaseAgent):
     """Stateless subagent - pure function execution"""
@@ -94,15 +121,24 @@ class StatelessSubAgent(BaseAgent):
                 capability=self.capability,
                 objective=request.objective,
                 data=json.dumps(request.data) if request.data else None,
-                constraints=json.dumps(request.constraints)
+                constraints=json.dumps(request.constraints) if request.constraints else None,
             )
             logger.debug("subagent_prompt", agent=self.name, prompt=prompt)
 
             # execute
-            start_time = time.time()
+            start_time: float = time.time()
             response = await self.model.ainvoke([HumanMessage(content=prompt)])
 
-            processing_time = int((time.time() - start_time) * 1000)
+            processing_time: float = int((time.time() - start_time) * 1000)
+
+            token_usage: dict = self._extract_token_usage(response)
+
+            # calculate cost
+            cost: float = self._calculate_cost(
+                token_usage["prompt_tokens"],
+                token_usage["completion_tokens"],
+                self.model_name,
+            )
 
             # parse response to structured format
             result = json.loads(response.content)
@@ -115,22 +151,27 @@ class StatelessSubAgent(BaseAgent):
                 processing_time_ms=processing_time,
                 confidence=result["confidence"],
                 confidence_reasoning=result.get("confidence_reasoning"),
-                metadata={"agent": self.name, "capability": self.capability}
+                tokens_used=token_usage["total_tokens"],
+                cost=cost,
+                metadata={
+                    "agent": self.name,
+                    "capability": self.capability,
+                },
             )
-            logger.debug("subagent_response", agent=self.name, response=task_response.to_json())
+            logger.debug("subagent_response", agent=self.name, response=task_response.to_json(), cost=cost)
 
             # cache result
             self.cache.set(request, task_response)
 
-            self._end_trace(trace, TaskStatus.COMPLETE, 100, 0.01)
+            self._end_trace(trace, TaskStatus.COMPLETE, token_usage["total_tokens"], cost)
             return task_response
 
         except Exception as e:
             logger.error(
                 "subagent_error",
-                agent=self.name,e
-                rror=str(e),
-                subagent_raw_response=response.content if 'response' in locals() else None,
+                agent=self.name,
+                error=str(e),
+                subagent_raw_response=response.content if "response" in locals() else None,
             )
             self._end_trace(trace, TaskStatus.FAILED, 0, 0.0, str(e))
 

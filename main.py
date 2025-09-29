@@ -1,5 +1,4 @@
 import asyncio
-import json
 
 from llm import llm
 from agents.base.base import StatelessSubAgent
@@ -253,25 +252,25 @@ async def main():
     print(f"Status: {response.status}")
     print(response.result["response"])
 
-    # example 2: parallel execution scenario
-    parallel_request = TaskRequest(
-        task_type="multi_competitor_analysis",
-        objective="Research pricing for competitors A, B, C simultaneously",
-        data={
-            "competitors": ["CompetitorA", "CompetitorB", "CompetitorC"],
-            "prices": {
-                "CompetitorA": "3.44, 4.99, 5.99",
-                "CompetitorB": "2.99, 4.49, 6.49",
-                "CompetitorC": "3.29, 5.29, 6.99",
-            },
-        },
-    )
+    # # example 2: parallel execution scenario
+    # parallel_request = TaskRequest(
+    #     task_type="multi_competitor_analysis",
+    #     objective="Research pricing for competitors A, B, C simultaneously",
+    #     data={
+    #         "competitors": ["CompetitorA", "CompetitorB", "CompetitorC"],
+    #         "prices": {
+    #             "CompetitorA": "3.44, 4.99, 5.99",
+    #             "CompetitorB": "2.99, 4.49, 6.49",
+    #             "CompetitorC": "3.29, 5.29, 6.99",
+    #         },
+    #     },
+    # )
 
-    print("\nExecuting parallel research task...")
-    response = await supervisor.execute(parallel_request)
-    print(f"Execution strategy: {response.metadata.get('strategy')}")
-    print(f"Status: {response.status}")
-    print(response.result["response"])
+    # print("\nExecuting parallel research task...")
+    # response = await supervisor.execute(parallel_request)
+    # print(f"Execution strategy: {response.metadata.get('strategy')}")
+    # print(f"Status: {response.status}")
+    # print(response.result["response"])
 
     # print execution traces
     print("\n=== Execution Summary ===")
@@ -279,7 +278,7 @@ async def main():
         if agent.execution_traces:
             print(f"\n{agent_name}:")
             for trace in agent.execution_traces[-3:]:  # last 3 traces
-                print(f"  Task {trace.task_id[:8]}: {trace.status} ({trace.duration_ms}ms)")
+                print(f"  Task {trace.task_id[:8]}: {trace.status} ({trace.duration_ms}ms, {trace.tokens_used} tokens, ${trace.cost:.4f})")
 
 
 if __name__ == "__main__":

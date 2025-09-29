@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 import arrow
 from enum import Enum
-from typing import Any
 import uuid
 
 from pydantic import BaseModel, Field, field_validator, field_serializer
