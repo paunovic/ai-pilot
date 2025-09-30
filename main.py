@@ -224,63 +224,83 @@ async def main():
         llm=llm,
     )
 
-    # example 1: complex task that needs decomposition
-    complex_request = TaskRequest(
-        task_type="comprehensive_analysis",
-        objective="Analyze customer feedback for Q3, identify top issues, and generate recommendations",
+    # # example 1: complex task that needs decomposition
+    # complex_request = TaskRequest(
+    #     task_type="comprehensive_analysis",
+    #     objective="Analyze customer feedback for Q3, identify top issues, and generate recommendations",
+    #     data={
+    #         "feedback_items": [
+    #             {"id": 1, "text": "App is slow on Android", "rating": 2},
+    #             {"id": 2, "text": "Love the new features", "rating": 5},
+    #             {"id": 3, "text": "Crashes frequently", "rating": 1},
+    #         ],
+    #     },
+    #     priority=TaskPriority.HIGH,
+    # )
+
+    # print("Executing complex analysis task...")
+    # response = await supervisor.execute(complex_request)
+    # print(f"Status: {response.status}")
+    # print(response.result["response"])
+
+    # # example 1: pull from cache
+    # complex_request = TaskRequest(
+    #     task_type="comprehensive_analysis",
+    #     objective="Analyze customer feedback for Q3, identify top issues, and generate recommendations",
+    #     data={
+    #         "feedback_items": [
+    #             {"id": 1, "text": "App is slow on Android", "rating": 2},
+    #             {"id": 2, "text": "Love the new features", "rating": 5},
+    #             {"id": 3, "text": "Crashes frequently", "rating": 1},
+    #         ],
+    #     },
+    #     priority=TaskPriority.HIGH,
+    # )
+
+    # print("Executing complex analysis task...")
+    # response = await supervisor.execute(complex_request)
+    # print(f"Status: {response.status}")
+    # print(response.result["response"])
+
+    # # example 2: parallel execution scenario
+    # parallel_request = TaskRequest(
+    #     task_type="multi_competitor_analysis",
+    #     objective="Research pricing for competitors A, B, C simultaneously",
+    #     data={
+    #         "competitors": ["CompetitorA", "CompetitorB", "CompetitorC"],
+    #         "prices": {
+    #             "CompetitorA": "3.44, 4.99, 5.99",
+    #             "CompetitorB": "2.99, 4.49, 6.49",
+    #             "CompetitorC": "3.29, 5.29, 6.99",
+    #         },
+    #     },
+    # )
+
+    # example 3: consensus execution scenario
+    consensus_request = TaskRequest(
+        task_type="critical_research",
+        objective="Determine the most effective marketing channel for product launch",
         data={
-            "feedback_items": [
-                {"id": 1, "text": "App is slow on Android", "rating": 2},
-                {"id": 2, "text": "Love the new features", "rating": 5},
-                {"id": 3, "text": "Crashes frequently", "rating": 1},
-            ],
-        },
-        priority=TaskPriority.HIGH,
-    )
-
-    print("Executing complex analysis task...")
-    response = await supervisor.execute(complex_request)
-    print(f"Status: {response.status}")
-    print(response.result["response"])
-
-    # example 1: pull from cache
-    complex_request = TaskRequest(
-        task_type="comprehensive_analysis",
-        objective="Analyze customer feedback for Q3, identify top issues, and generate recommendations",
-        data={
-            "feedback_items": [
-                {"id": 1, "text": "App is slow on Android", "rating": 2},
-                {"id": 2, "text": "Love the new features", "rating": 5},
-                {"id": 3, "text": "Crashes frequently", "rating": 1},
-            ],
-        },
-        priority=TaskPriority.HIGH,
-    )
-
-    print("Executing complex analysis task...")
-    response = await supervisor.execute(complex_request)
-    print(f"Status: {response.status}")
-    print(response.result["response"])
-
-    # example 2: parallel execution scenario
-    parallel_request = TaskRequest(
-        task_type="multi_competitor_analysis",
-        objective="Research pricing for competitors A, B, C simultaneously",
-        data={
-            "competitors": ["CompetitorA", "CompetitorB", "CompetitorC"],
-            "prices": {
-                "CompetitorA": "3.44, 4.99, 5.99",
-                "CompetitorB": "2.99, 4.49, 6.49",
-                "CompetitorC": "3.29, 5.29, 6.99",
+            "channels": ["Social Media", "Email", "SEO", "PPC"],
+            "past_performance": {
+                "Social Media": "High engagement but low conversion",
+                "Email": "Moderate engagement and conversion",
+                "SEO": "Low engagement but high conversion",
+                "PPC": "High engagement and high conversion",
             },
         },
     )
 
-    print("\nExecuting parallel research task...")
-    response = await supervisor.execute(parallel_request)
-    print(f"Execution strategy: {response.metadata.get('strategy')}")
+    print("\nExecuting critical research task with consensus...")
+    response = await supervisor.execute(consensus_request)
     print(f"Status: {response.status}")
     print(response.result["response"])
+
+    # print("\nExecuting parallel research task...")
+    # response = await supervisor.execute(parallel_request)
+    # print(f"Execution strategy: {response.metadata.get('strategy')}")
+    # print(f"Status: {response.status}")
+    # print(response.result["response"])
 
     # print execution traces
     print("\n=== Execution Summary ===")

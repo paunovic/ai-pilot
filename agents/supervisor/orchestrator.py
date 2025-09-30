@@ -163,7 +163,6 @@ class OrchestrationEngine:
         self,
         task: TaskRequest,
         agents: list[StatelessSubAgent],
-        min_agreement: float = 0.66
     ) -> TaskResponse:
         # execute task with multiple agents and reach consensus
 
@@ -173,9 +172,9 @@ class OrchestrationEngine:
         ])
 
         # analyze consensus
-        successful = [r for r in responses if r.status == TaskStatus.COMPLETE]
+        successful_responses = [r for r in responses if r.status == TaskStatus.COMPLETE]
 
-        if not successful:
+        if not successful_responses:
             return TaskResponse(
                 task_id=task.task_id,
                 status=TaskStatus.FAILED,
@@ -183,15 +182,12 @@ class OrchestrationEngine:
                 metadata={"attempted_agents": len(agents)}
             )
 
-        # simple voting mechanism (in production, use more sophisticated consensus)
-        # results = [r.result for r in successful if r.result]
-
-        # for demo, just return the most confident result
-        best_response = max(successful, key=lambda r: r.confidence)
+        # just return the most confident result for now
+        best_response = max(successful_responses, key=lambda r: r.confidence)
         best_response.metadata["consensus"] = {
             "total_agents": len(agents),
-            "successful_agents": len(successful),
-            "confidence_scores": [r.confidence for r in successful]
+            "successful_agents": len(successful_responses),
+            "confidence_scores": [r.confidence for r in successful_responses]
         }
 
         return best_response

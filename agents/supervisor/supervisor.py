@@ -75,7 +75,7 @@ Data: ```{json.dumps(state['request_data'], indent=2) if state.get('request_data
 
 Consider:
 1. Can this be done by a single agent or needs multiple?
-2. Are subtasks independent (parallel) or dependent (sequential)?
+2. Are subtasks independent (parallel), dependent (sequential), or require consensus (consensus)?
 3. Does this need consensus from multiple agents?
 
 IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MUST respond ONLY with a structured JSON response that is compatible with Pydantic.
