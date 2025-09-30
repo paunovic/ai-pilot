@@ -9,4 +9,5 @@ llm = init_chat_model(
     model_provider="anthropic",
     temperature=0,
     max_tokens=4096,
+    extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
 )
