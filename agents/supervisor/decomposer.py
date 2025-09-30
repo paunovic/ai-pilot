@@ -184,28 +184,42 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
     @staticmethod
     def generate_execution_order(dependency_graph: dict[str, list[str]]) -> list[str]:
         # generate topological sort for execution order
+        # dependency_graph[task] = [list of tasks that must complete before this task]
 
         # calculate in-degrees (how many dependencies each task has)
-        in_degree = defaultdict(int)
-        for node in dependency_graph:
-            in_degree[node] = len(dependency_graph[node])
+        in_degree = {node: len(deps) for node, deps in dependency_graph.items()}
+
+        # build reverse graph (who depends on each task)
+        dependents = defaultdict(list)
+        for node, deps in dependency_graph.items():
+            for dep in deps:
+                dependents[dep].append(node)
 
         # start with tasks that have no dependencies
         queue = deque([node for node, degree in in_degree.items() if degree == 0])
         result = []
-        processed = set()
 
         while queue:
             node = queue.popleft()
             result.append(node)
-            processed.add(node)
 
-            # find tasks that were waiting for this task to complete
-            for other_node, deps in dependency_graph.items():
-                if node in deps and other_node not in processed:
-                    in_degree[other_node] -= 1
-                    if in_degree[other_node] == 0:
-                        queue.append(other_node)
+            # for each task that depends on this completed task
+            for dependent in dependents[node]:
+                in_degree[dependent] -= 1
+                if in_degree[dependent] == 0:
+                    queue.append(dependent)
+
+        # check if all tasks were processed (detect cycles)
+        if len(result) != len(dependency_graph):
+            logger.error(
+                "topological_sort_incomplete",
+                expected=len(dependency_graph),
+                actual=len(result),
+                missing=[node for node in dependency_graph if node not in result]
+            )
+            # return partial result + remaining tasks
+            remaining = [node for node in dependency_graph if node not in result]
+            return result + remaining
 
         return result
 
@@ -279,6 +293,18 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
             objectives=objectives,
             context=f"Primary task: {objective}"
         )
+
+        # validate dependency graph for circular dependencies
+        if TaskDecomposer.has_circular_dependencies(dependency_graph):
+            logger.error(
+                "circular_dependencies_detected_forcing_parallel",
+                objectives=objectives,
+                dependency_graph=dependency_graph
+            )
+            # force parallel execution to avoid deadlock
+            strategy = ExecutionStrategy.PARALLEL
+            # clear all dependencies
+            dependency_graph = {obj: [] for obj in objectives}
 
         logger.debug(
             "dependency_analysis_complete",

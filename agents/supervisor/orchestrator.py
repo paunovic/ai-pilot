@@ -184,30 +184,48 @@ class OrchestrationEngine:
         results = {}
         results_lock = asyncio.Lock()
 
+        # track active workers for proper shutdown
+        active_workers = []
+
         async def worker(worker_id: int):
             # worker coroutine that processes tasks from the queue
+            logger.debug("worker_started", worker_id=worker_id)
+
             while True:
                 try:
                     # get next task from queue (non-blocking if queue is empty)
                     task = await asyncio.wait_for(task_queue.get(), timeout=0.1)
                 except asyncio.TimeoutError:
                     # no more tasks available
+                    logger.debug("worker_no_tasks", worker_id=worker_id)
+                    break
+                except Exception as e:
+                    logger.error("worker_queue_error", worker_id=worker_id, error=str(e))
                     break
 
                 try:
                     # execute the task
-                    task, response = await task_executor(task)
+                    logger.debug("worker_executing_task", worker_id=worker_id, task_id=task.task_id)
+                    task_obj, response = await task_executor(task)
 
                     # store the result
                     async with results_lock:
-                        results[task.task_id] = (task, response)
+                        results[task_obj.task_id] = (task_obj, response)
+
+                    logger.debug(
+                        "worker_task_complete",
+                        worker_id=worker_id,
+                        task_id=task.task_id,
+                        status=response.status
+                    )
 
                 except Exception as e:
                     logger.error(
                         "worker_task_failed",
                         worker_id=worker_id,
                         task_id=task.task_id,
-                        error=str(e)
+                        error=str(e),
+                        error_type=type(e).__name__
                     )
 
                     # store error response
@@ -224,22 +242,50 @@ class OrchestrationEngine:
                 finally:
                     task_queue.task_done()
 
+            logger.debug("worker_finished", worker_id=worker_id)
+
         # create worker pool
         num_workers = min(self.max_parallel_tasks, len(tasks))
+        logger.info("starting_worker_pool", num_workers=num_workers, total_tasks=len(tasks))
 
         workers = [
             asyncio.create_task(worker(i))
             for i in range(num_workers)
         ]
+        active_workers.extend(workers)
 
         # wait for all workers to complete
-        await asyncio.gather(*workers, return_exceptions=True)
-
-        # ensure all tasks were processed
-        await task_queue.join()
+        try:
+            await asyncio.gather(*workers, return_exceptions=False)
+        except Exception as e:
+            logger.error("worker_pool_error", error=str(e))
+            # cancel remaining workers
+            for w in workers:
+                if not w.done():
+                    w.cancel()
+            raise
+        finally:
+            # ensure all tasks were processed
+            await task_queue.join()
 
         # return results in original task order
-        ordered_results = [results[task.task_id] for task in tasks if task.task_id in results]
+        ordered_results = []
+        for task in tasks:
+            if task.task_id in results:
+                ordered_results.append(results[task.task_id])
+            else:
+                logger.error("missing_task_result", task_id=task.task_id)
+                # add a failure response for missing results
+                ordered_results.append((
+                    task,
+                    TaskResponse(
+                        task_id=task.task_id,
+                        status=TaskStatus.FAILED,
+                        error="Task result not found after execution",
+                        error_type="MissingResultError"
+                    )
+                ))
+
         return ordered_results
 
     async def execute_consensus(
