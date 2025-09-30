@@ -2,6 +2,7 @@ from collections import deque, defaultdict
 from typing import Any
 import json
 
+
 from langchain_core.messages import HumanMessage
 import structlog
 
@@ -79,6 +80,12 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
         response = await (
             llm
             .with_structured_output(TaskDecompositionAnalysis)
+            .with_retry(
+                retry_if_exception_type=(ValueError, AttributeError,),
+                wait_exponential_jitter=True,
+                stop_after_attempt=3,
+                exponential_jitter_params={"initial": 2},
+            )
             .ainvoke([HumanMessage(content=dependency_analysis_prompt)])
         )
 
@@ -220,7 +227,7 @@ Don't go overboard though - keep subtasks focused and manageable.
 Task: {objective}
 Data: ```{json.dumps(data, indent=2) if data else "None"}```
 
-Rules that you MUST folow no matter what:
+Rules that you MUST follow no matter what:
 - Keep subtasks focused and atomic
 - Each subtask should have a clear, measurable objective
 - ALL relevant data MUST BE included in the subtask data field
@@ -231,9 +238,16 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
 
         logger.debug("decomposing_prompt", prompt=decomposition_prompt)
 
+        # add retry
         response = await (
             llm
             .with_structured_output(SubtaskDecomposition, include_raw=True)
+            .with_retry(
+                retry_if_exception_type=(ValueError, AttributeError,),
+                wait_exponential_jitter=True,
+                stop_after_attempt=3,
+                exponential_jitter_params={"initial": 2},
+            )
             .ainvoke([HumanMessage(content=decomposition_prompt)])
         )
 
