@@ -132,7 +132,7 @@ class StatelessSubAgent(BaseAgent):
                     # convert Pydantic model to dict
                     result = parsed_content.model_dump()
                 else:
-                    result = parsed_content.model_dump() if hasattr(parsed_content, 'model_dump') else parsed_content
+                    result = parsed_content.model_dump() if hasattr(parsed_content, "model_dump") else parsed_content
             elif isinstance(response, AIMessage):
                 # response without include_raw=True or plain AIMessage
                 raw_response = response
