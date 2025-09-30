@@ -189,15 +189,12 @@ class OrchestrationEngine:
 
         async def worker(worker_id: int):
             # worker coroutine that processes tasks from the queue
-            logger.debug("worker_started", worker_id=worker_id)
-
             while True:
                 try:
                     # get next task from queue (non-blocking if queue is empty)
                     task = await asyncio.wait_for(task_queue.get(), timeout=0.1)
                 except asyncio.TimeoutError:
                     # no more tasks available
-                    logger.debug("worker_no_tasks", worker_id=worker_id)
                     break
                 except Exception as e:
                     logger.error("worker_queue_error", worker_id=worker_id, error=str(e))
@@ -205,19 +202,11 @@ class OrchestrationEngine:
 
                 try:
                     # execute the task
-                    logger.debug("worker_executing_task", worker_id=worker_id, task_id=task.task_id)
                     task_obj, response = await task_executor(task)
 
                     # store the result
                     async with results_lock:
                         results[task_obj.task_id] = (task_obj, response)
-
-                    logger.debug(
-                        "worker_task_complete",
-                        worker_id=worker_id,
-                        task_id=task.task_id,
-                        status=response.status
-                    )
 
                 except Exception as e:
                     logger.error(
