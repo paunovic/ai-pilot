@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Callable
 import asyncio
 
 import structlog
@@ -91,7 +91,7 @@ class OrchestrationEngine:
         tasks: list[TaskRequest],
         agents: dict[str, StatelessSubAgent]
     ) -> list[TaskResponse]:
-        """Execute independent tasks in parallel using a worker pool pattern"""
+        # execute independent tasks in parallel using a worker pool pattern
 
         if not tasks:
             return []
@@ -104,7 +104,7 @@ class OrchestrationEngine:
         completed_results = {}
 
         async def run_task(task: TaskRequest) -> tuple[TaskRequest, TaskResponse]:
-            """Wrapper to return both task and response for easier tracking"""
+            # wrapper to return both task and response for easier tracking
             agent = self._select_agent(task, agents)
             response = await agent.execute(task)
             return task, response
@@ -157,7 +157,7 @@ class OrchestrationEngine:
             # execute tasks using worker pool
             level_responses = await self._execute_with_worker_pool(prepared_tasks, run_task)
 
-            # update completed results for next level
+            # update completed results for the next level
             for task, response in level_responses:
                 if response.status == TaskStatus.COMPLETE:
                     completed_results[task.objective] = response.result
@@ -168,9 +168,9 @@ class OrchestrationEngine:
     async def _execute_with_worker_pool(
         self,
         tasks: list[TaskRequest],
-        task_executor: callable
+        task_executor: Callable,
     ) -> list[tuple[TaskRequest, TaskResponse]]:
-        """Execute tasks using a worker pool that starts new tasks as workers become available"""
+        # execute tasks using a worker pool that starts new tasks as workers become available
 
         if not tasks:
             return []
@@ -185,7 +185,7 @@ class OrchestrationEngine:
         results_lock = asyncio.Lock()
 
         async def worker(worker_id: int):
-            """Worker coroutine that processes tasks from the queue"""
+            # worker coroutine that processes tasks from the queue
             while True:
                 try:
                     # get next task from queue (non-blocking if queue is empty)
