@@ -67,7 +67,6 @@ async def create_specialized_agents() -> dict[str, StatelessSubAgent]:
         confidence: Annotated[float, Field(ge=0.0, le=1.0, description="Confidence level between 0.0 and 1.0")]
         confidence_reasoning: str = Field(description="Explanation for the confidence level")
 
-
     research_agent = StatelessSubAgent(
         name="ResearchAgent",
         capability=AgentCapability.RESEARCH,
