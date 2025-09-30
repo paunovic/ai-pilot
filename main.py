@@ -195,7 +195,7 @@ Consider factors like:
 If applicable, also include a "confidence_reasoning" field explaining your confidence level.
 
 Analyze relevant information and return as JSON strictly following the following format:
-{{"is_valid": true/false,"issues": [...],"suggestions": [...],"confidence": 0.0-1.0"confidence_reasoning": "explanation of confidence level"}}
+{{"is_valid": true/false,"issues": [...],"suggestions": [...],"confidence": 0.0-1.0,"confidence_reasoning": "explanation of confidence level"}}
 
 `...` indicates items and should be filled accordingly.
 """

@@ -99,8 +99,8 @@ class TaskResponse(BaseModel):
     result: dict | list | None = None
     error: str | None = None
     error_type: str | None = None
-    partial_result: dict | list |None = None
-    confidence: float = Field(ge=0.0, le=1.0, default=1.0)
+    partial_result: dict | list | None = None
+    confidence: float | None = Field(ge=0.0, le=1.0, default=1.0)
     confidence_reasoning: str | None = None
     processing_time_ms: int = 0
     tokens_used: int = 0
