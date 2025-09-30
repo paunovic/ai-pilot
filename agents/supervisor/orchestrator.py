@@ -184,9 +184,6 @@ class OrchestrationEngine:
         results = {}
         results_lock = asyncio.Lock()
 
-        # track active workers for proper shutdown
-        active_workers = []
-
         async def worker(worker_id: int):
             # worker coroutine that processes tasks from the queue
             while True:
@@ -241,11 +238,10 @@ class OrchestrationEngine:
             asyncio.create_task(worker(i))
             for i in range(num_workers)
         ]
-        active_workers.extend(workers)
 
         # wait for all workers to complete
         try:
-            await asyncio.gather(*workers, return_exceptions=False)
+            await asyncio.gather(*workers, return_exceptions=True)
         except Exception as e:
             logger.error("worker_pool_error", error=str(e))
             # cancel remaining workers
@@ -259,21 +255,22 @@ class OrchestrationEngine:
 
         # return results in original task order
         ordered_results = []
-        for task in tasks:
-            if task.task_id in results:
-                ordered_results.append(results[task.task_id])
-            else:
-                logger.error("missing_task_result", task_id=task.task_id)
-                # add a failure response for missing results
-                ordered_results.append((
-                    task,
-                    TaskResponse(
-                        task_id=task.task_id,
-                        status=TaskStatus.FAILED,
-                        error="Task result not found after execution",
-                        error_type="MissingResultError"
-                    )
-                ))
+        async with results_lock:
+            for task in tasks:
+                if task.task_id in results:
+                    ordered_results.append(results[task.task_id])
+                else:
+                    logger.error("missing_task_result", task_id=task.task_id)
+                    # add a failure response for missing results
+                    ordered_results.append((
+                        task,
+                        TaskResponse(
+                            task_id=task.task_id,
+                            status=TaskStatus.FAILED,
+                            error="Task result not found after execution",
+                            error_type="MissingResultError"
+                        )
+                    ))
 
         return ordered_results
 
