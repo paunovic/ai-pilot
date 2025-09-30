@@ -48,7 +48,7 @@ class AgentCapability(str, Enum):
 class TaskContext:
     """Minimal context passed to subagents"""
     background: str | None = None
-    constraints: dict | list = field(default_factory=dict)
+    constraints: dict = field(default_factory=dict)
     output_format: str = "structured_json"
     timeout_ms: int = 30000
     max_tokens: int = 2000
@@ -62,7 +62,7 @@ class TaskRequest(BaseModel):
     data: dict | list | None = None
     context: TaskContext | None = None
     priority: TaskPriority = TaskPriority.MEDIUM
-    constraints: dict | list = Field(default_factory=dict)
+    constraints: dict = Field(default_factory=dict)
     created_at: arrow.Arrow = Field(default_factory=lambda: arrow.utcnow())
 
     class Config:

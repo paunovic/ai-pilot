@@ -5,6 +5,7 @@ from llm import llm
 from pydantic import BaseModel, Field
 from agents.base.base import StatelessSubAgent
 from agents.base.model import (
+    TaskPriority,
     TaskRequest,
     AgentCapability,
 )

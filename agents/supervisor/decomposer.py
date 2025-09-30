@@ -30,7 +30,8 @@ class TaskDecomposer:
     async def analyze_dependencies(
         llm: Any,
         objectives: list[str],
-        context: str | None = None
+        state: dict,
+        context: str | None = None,
     ) -> tuple[ExecutionStrategy, dict[str, list[str]]]:
         """
         Use LLM to analyze task dependencies and determine execution strategy
@@ -79,7 +80,7 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
 
         response = await (
             llm
-            .with_structured_output(TaskDecompositionAnalysis)
+            .with_structured_output(TaskDecompositionAnalysis, include_raw=True)
             .with_retry(
                 retry_if_exception_type=(ValueError, AttributeError,),
                 wait_exponential_jitter=True,
@@ -89,11 +90,28 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
             .ainvoke([HumanMessage(content=dependency_analysis_prompt)])
         )
 
-        logger.debug("dependency_analysis_response", response=response)
+        logger.debug("dependency_analysis_response", response=response["parsed"])
+
+        # track token usage if state is provided
+        token_usage = extract_token_usage(response["raw"])
+        cost = calculate_token_usage_cost(
+            token_usage["prompt_tokens"],
+            token_usage["completion_tokens"],
+            llm.model,
+        )
+
+        state["execution_metrics"]["supervisor"]["orchestration_tokens"] = (
+            state["execution_metrics"]["supervisor"]["orchestration_tokens"]
+            + token_usage["total_tokens"]
+        )
+        state["execution_metrics"]["supervisor"]["orchestration_cost"] = (
+            state["execution_metrics"]["supervisor"]["orchestration_cost"]
+            + cost
+        )
 
         # validate and extract results
-        strategy = ExecutionStrategy(response.strategy)
-        dependency_graph = response.dependency_graph
+        strategy = ExecutionStrategy(response["parsed"].strategy)
+        dependency_graph = response["parsed"].dependency_graph
 
         # validate that all objectives are represented in dependency graph
         missing_objectives = set(objectives) - set(dependency_graph.keys())
@@ -118,8 +136,8 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
             strategy=strategy,
             total_objectives=len(objectives),
             has_dependencies=any(deps for deps in dependency_graph.values()),
-            confidence=response.confidence,
-            reasoning=response.strategy_reasoning,
+            confidence=response["parsed"].confidence,
+            reasoning=response["parsed"].strategy_reasoning,
         )
 
         # additional validation for circular dependencies
@@ -291,7 +309,8 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
         strategy, dependency_graph = await TaskDecomposer.analyze_dependencies(
             llm=llm,
             objectives=objectives,
-            context=f"Primary task: {objective}"
+            state=state,
+            context=f"Primary task: {objective}",
         )
 
         # validate dependency graph for circular dependencies
