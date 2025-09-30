@@ -3,7 +3,7 @@ import json
 
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.memory import InMemorySaver
 from agents.base.model import AgentCapability
 import structlog
 from agents.base.base import BaseAgent, StatelessSubAgent
@@ -37,10 +37,10 @@ class SupervisorAgent(BaseAgent):
     ):
         super().__init__(name=name, capability=AgentCapability.SUPERVISOR, llm=llm, model_name=llm.model)
 
-        self.subagents = subagents or {}
+        self.subagents: dict = subagents or {}
         self.orchestrator = OrchestrationEngine()
         self.decomposer = TaskDecomposer()
-        self.state_graph = self._build_state_graph()
+        self.state_graph: StateGraph = self._build_state_graph()
 
     def _build_state_graph(self) -> StateGraph:
         # build langgraph state machine for supervision
@@ -59,14 +59,14 @@ class SupervisorAgent(BaseAgent):
         workflow.add_edge("orchestrate", "synthesize")
         workflow.add_edge("synthesize", END)
 
-        return workflow.compile(checkpointer=MemorySaver())
+        return workflow.compile(checkpointer=InMemorySaver())
 
     async def analyze_request(self, state: dict[str, Any]) -> dict[str, Any]:
         # analyze user request complexity and determine execution strategy
 
-        user_request = state["user_request"]
+        user_request: str = state["user_request"]
 
-        analysis_prompt = f"""
+        analysis_prompt: str = f"""
 You are an extremely correct and diligent task analysis agent.
 Analyze the complexity of this user request and determine the best approach to fulfill it.
 
@@ -91,8 +91,8 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
 
         logger.debug("request_analysis", response=response)
 
-        token_usage = extract_token_usage(response["raw"])
-        cost = calculate_token_usage_cost(
+        token_usage: dict = extract_token_usage(response["raw"])
+        cost: float = calculate_token_usage_cost(
             token_usage["prompt_tokens"],
             token_usage["completion_tokens"],
             self.model_name,
@@ -124,7 +124,7 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
         logger.info(
             "task_decomposed",
             strategy=strategy,
-            task_count=len(tasks)
+            task_count=len(tasks),
         )
 
         return state
@@ -138,7 +138,7 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
         responses = await self.orchestrator.execute_with_strategy(
             strategy,
             tasks,
-            self.subagents
+            self.subagents,
         )
 
         state["task_responses"] = responses
@@ -151,7 +151,7 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
             "orchestration_complete",
             total_tasks=len(tasks),
             successful=successful,
-            failed=failed
+            failed=failed,
         )
 
         return state
@@ -240,7 +240,7 @@ Provide a comprehensive summary that addresses the original request.
 
             final_state = await self.state_graph.ainvoke(
                 initial_state,
-                config={"configurable": {"thread_id": request.task_id}}
+                config={"configurable": {"thread_id": request.task_id}},
             )
 
             # build response
@@ -254,7 +254,7 @@ Provide a comprehensive summary that addresses the original request.
                 metadata={
                     "strategy": final_state["execution_strategy"],
                     "task_count": len(final_state["tasks"]),
-                }
+                },
             )
 
             supervisor_tokens = (
