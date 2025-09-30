@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import arrow
 import json
 import time
+import traceback
 from typing import Any
 
 from langchain_core.messages import HumanMessage
@@ -159,7 +160,7 @@ class StatelessSubAgent(BaseAgent):
             return task_response
 
         except Exception as e:
-            logger.error("subagent_error", agent=self.name, error=str(e))
+            logger.error("subagent_error", agent=self.name, error=str(e), traceback=traceback.format_exc())
             self._end_trace(trace, TaskStatus.FAILED, 0, 0.0, str(e))
 
             return TaskResponse(

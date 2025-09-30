@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 from agents.base.base import StatelessSubAgent
 from agents.base.model import (
     TaskRequest,
-    TaskPriority,
     AgentCapability,
 )
 from agents.supervisor.supervisor import SupervisorAgent
@@ -275,7 +274,7 @@ async def main():
         },
     )
 
-    print("\nExecuting critical research task with consensus...")
+    print("\nExecuting parallel competitor analysis task...")
     response = await supervisor.execute(parallel_request)
     print(f"Status: {response.status}")
     print(response.result["response"])

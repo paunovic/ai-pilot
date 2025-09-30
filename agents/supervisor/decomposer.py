@@ -12,7 +12,6 @@ from agents.base.model import (
 )
 from agents.supervisor.model import (
     SubtaskDecomposition,
-    TaskComplexityAnalysis,
     TaskDecompositionAnalysis,
 )
 from agents.utils import (
@@ -209,7 +208,6 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
         objective: str,
         state: dict,
         data: dict | list | None,
-        analysis: TaskComplexityAnalysis | None = None,
     ) -> tuple[ExecutionStrategy, list[TaskRequest]]:
         # use LLM to decompose a complex task into subtasks with proper dependency analysis
 
@@ -221,7 +219,6 @@ Don't go overboard though - keep subtasks focused and manageable.
 
 Task: {objective}
 Data: ```{json.dumps(data, indent=2) if data else "None"}```
-Analysis: ```{analysis.model_dump_json() if analysis else "None"}```
 
 Rules that you MUST folow no matter what:
 - Keep subtasks focused and atomic
@@ -302,7 +299,7 @@ IMPORTANT: Your response is parsed with `llm.with_structured_output()` so you MU
             # determine priority based on dependencies and complexity
             priority = TaskPriority.HIGH if subtask.estimated_complexity == "high" else TaskPriority.MEDIUM
 
-            # for parallel execution, high priority if many dependencies
+            # for parallel execution, high priority if has dependencies
             if strategy == ExecutionStrategy.PARALLEL:
                 deps_count = len(dependency_graph.get(subtask.objective, []))
                 if deps_count > 0:

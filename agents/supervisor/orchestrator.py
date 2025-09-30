@@ -1,6 +1,5 @@
 from typing import Any
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
 import structlog
 
@@ -18,16 +17,9 @@ logger = structlog.get_logger()
 class OrchestrationEngine:
     """Manages parallel and sequential execution of agents"""
 
-    def __init__(self, max_parallel: int = 10):
-        self.max_parallel = max_parallel
+    def __init__(self, max_parallel_tasks: int = 8):
+        self.max_parallel_tasks = max_parallel_tasks
         self.execution_history: list[dict[str, Any]] = []
-
-    async def __aenter__(self):
-        self.executor = ThreadPoolExecutor(max_workers=self.max_parallel)
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.executor.shutdown(wait=True)
 
     async def execute_sequential(
         self,
@@ -35,62 +27,62 @@ class OrchestrationEngine:
         agents: dict[str, StatelessSubAgent]
     ) -> list[TaskResponse]:
         # execute tasks sequentially, respecting dependencies
+
         responses = []
         completed_tasks = set()
         task_results = {}  # store results for dependent tasks
-        halt_execution = False
 
-        while not halt_execution and len(task_results) != len(tasks):
-            for task in tasks:
-                # check if dependencies are satisfied
-                dependencies = task.constraints.get("dependencies", [])
-                unsatisfied_deps = [dep for dep in dependencies if dep not in completed_tasks]
+        for task in tasks:
+            # check if dependencies are satisfied
+            dependencies: list[str] = task.constraints.get("dependencies", [])
+            unsatisfied_deps: list[str] = [dep for dep in dependencies if dep not in completed_tasks]
 
-                if unsatisfied_deps:
-                    logger.warning(
-                        "dependency_not_satisfied",
-                        task_id=task.task_id,
-                        missing=unsatisfied_deps
-                    )
-                    continue
-
-                # add results from previous tasks to current task's data
-                if dependencies and task_results:
-                    dependency_data = {
-                        dep: task_results.get(dep)
-                        for dep in dependencies
-                        if dep in task_results
-                    }
-                    if task.data is None:
-                        task.data = {}
-                    task.data["dependency_results"] = dependency_data
-
-                agent = self._select_agent(task, agents)
-                response = await agent.execute(task)
-                responses.append(response)
-
-                # track completion and store results
-                if response.status == TaskStatus.COMPLETE:
-                    completed_tasks.add(task.objective)
-                    task_results[task.objective] = response.result
-
-                logger.info(
-                    "sequential_task_complete",
+            # if dependencies are not met, halt further execution
+            if unsatisfied_deps:
+                logger.error(
+                    "dependency_not_satisfied",
                     task_id=task.task_id,
-                    status=response.status,
-                    agent=agent.name,
-                    dependencies_satisfied=len(dependencies) - len(unsatisfied_deps)
+                    missing=unsatisfied_deps,
                 )
+                break
 
-                # if task failed, halt further execution
-                if response.status == TaskStatus.FAILED:
-                    logger.error(
-                        "sequential_execution_halted",
-                        task_id=task.task_id,
-                        reason=response.error
-                    )
-                    halt_execution = True
-                    break
+            # add results from previous tasks to current task's data
+            if dependencies and task_results:
+                dependency_data = {
+                    dep: task_results.get(dep)
+                    for dep in dependencies
+                    if dep in task_results
+                }
+                if task.data is None:
+                    task.data = {}
+                task.data["dependency_results"] = dependency_data
+
+            # run the task
+            agent = self._select_agent(task, agents)
+            response = await agent.execute(task)
+            responses.append(response)
+
+            # track completion and store results
+            if response.status == TaskStatus.COMPLETE:
+                completed_tasks.add(task.objective)
+                task_results[task.objective] = response.result
+
+            logger.info(
+                "sequential_task_complete",
+                task_id=task.task_id,
+                status=response.status,
+                agent=agent.name,
+                dependencies_satisfied=len(dependencies) - len(unsatisfied_deps)
+            )
+
+            # if task failed, halt further execution
+            if response.status == TaskStatus.FAILED:
+                logger.error(
+                    "sequential_execution_halted",
+                    task_id=task.task_id,
+                    reason=response.error,
+                )
+                break
 
         return responses
 
@@ -106,6 +98,7 @@ class OrchestrationEngine:
 
         # group tasks by dependency level for batched parallel execution
         dependency_levels = self._group_by_dependency_level(tasks)
+        logger.info("dependency_levels_identified", levels=len(dependency_levels))
         all_responses = []
         completed_results = {}
 
@@ -114,48 +107,65 @@ class OrchestrationEngine:
             return await agent.execute(task)
 
         for level_tasks in dependency_levels:
-            logger.info("executing_parallel_batch", batch_size=len(level_tasks))
+            logger.info("execute_parallel_tasks", tasks=len(level_tasks))
 
             # add dependency results to each task in this level
+            task_coroutines = []
             for task in level_tasks:
                 dependencies = task.constraints.get("dependencies", [])
+                logger.info(f"dependencies_for_task_{task.task_id}", dependencies=dependencies)
                 if dependencies and completed_results:
                     dependency_data = {
                         dep: completed_results.get(dep)
                         for dep in dependencies
                         if dep in completed_results
                     }
-                    if task.data is None:
-                        task.data = {}
+                    if len(dependency_data) != len(dependencies):
+                        logger.warning(
+                            "missing_dependency_data",
+                            task_id=task.task_id,
+                            missing=[dep for dep in dependencies if dep not in dependency_data]
+                        )
+                        break
+
+                    task.data = task.data or {}
                     task.data["dependency_results"] = dependency_data
 
-            # create coroutines for current level
-            coroutines = [run_task(task) for task in level_tasks]
+                task_coroutines.append(run_task(task))
+
+            if len(task_coroutines) != len(level_tasks):
+                logger.error(
+                    "parallel_execution_halted",
+                    reason="missing dependency data for some tasks",
+                )
+                break
 
             # execute in parallel with controlled concurrency
-            batch_responses = []
-            for i in range(0, len(coroutines), self.max_parallel):
-                batch = coroutines[i:i + self.max_parallel]
+            level_responses = []
+            for i in range(0, len(task_coroutines), self.max_parallel_tasks):
+                batch = task_coroutines[i:i + self.max_parallel_tasks]
                 batch_results = await asyncio.gather(*batch, return_exceptions=True)
 
                 for j, result in enumerate(batch_results):
                     if isinstance(result, Exception):
                         task_idx = i + j
-                        batch_responses.append(TaskResponse(
+                        level_responses.append(TaskResponse(
                             task_id=level_tasks[task_idx].task_id,
                             status=TaskStatus.FAILED,
                             error=str(result),
                             error_type=type(result).__name__
                         ))
                     else:
-                        batch_responses.append(result)
+                        level_responses.append(result)
+
+            assert len(level_responses) == len(level_tasks), "Mismatch in task and response count"
 
             # update completed results for next level
-            for task, response in zip(level_tasks, batch_responses):
+            for task, response in zip(level_tasks, level_responses):
                 if response.status == TaskStatus.COMPLETE:
                     completed_results[task.objective] = response.result
 
-            all_responses.extend(batch_responses)
+            all_responses.extend(level_responses)
 
         return all_responses
 
@@ -179,7 +189,7 @@ class OrchestrationEngine:
                 task_id=task.task_id,
                 status=TaskStatus.FAILED,
                 error="No agents succeeded",
-                metadata={"attempted_agents": len(agents)}
+                metadata={"attempted_agents": len(agents)},
             )
 
         # just return the most confident result for now
@@ -187,7 +197,7 @@ class OrchestrationEngine:
         best_response.metadata["consensus"] = {
             "total_agents": len(agents),
             "successful_agents": len(successful_responses),
-            "confidence_scores": [r.confidence for r in successful_responses]
+            "confidence_scores": [r.confidence for r in successful_responses],
         }
 
         return best_response
@@ -203,28 +213,27 @@ class OrchestrationEngine:
             task_deps[task.objective] = task.constraints.get("dependencies", [])
             task_map[task.objective] = task
 
+        logger.info("task_deps_graph", graph=task_deps)
+
         # calculate dependency levels
         levels = []
-        remaining_tasks = set(task.objective for task in tasks)
-        completed = set()
-
-        while remaining_tasks:
-            # find tasks with no unmet dependencies
+        assigned = set()
+        while len(assigned) < len(tasks):
             current_level = []
-            for task_obj in list(remaining_tasks):
-                deps = task_deps[task_obj]
-                if all(dep in completed for dep in deps):
-                    current_level.append(task_map[task_obj])
-                    remaining_tasks.remove(task_obj)
-                    completed.add(task_obj)
-
+            for obj, deps in task_deps.items():
+                if obj in assigned:
+                    continue
+                if all(dep in assigned for dep in deps):
+                    current_level.append(task_map[obj])
             if not current_level:
-                # circular dependency or missing dependency - add remaining tasks
-                logger.warning("dependency_resolution_failed", remaining=list(remaining_tasks))
-                current_level = [task_map[obj] for obj in remaining_tasks]
-                remaining_tasks.clear()
-
+                # circular dependency or unresolved dependency detected
+                logger.error("circular_or_unresolved_dependency", remaining_tasks=len(tasks) - len(assigned))
+                break
             levels.append(current_level)
+            for task in current_level:
+                assigned.add(task.objective)
+
+        logger.info("dependency_levels", levels=levels)
 
         return levels
 
@@ -258,9 +267,8 @@ class OrchestrationEngine:
         elif strategy == ExecutionStrategy.PARALLEL:
             return await self.execute_parallel(tasks, agents)
         elif strategy == ExecutionStrategy.CONSENSUS:
-            # run first task through multiple agents
             if tasks:
-                agent_list = list(agents.values())[:3]  # use up to 3 agents
+                agent_list = list(agents.values())
                 result = await self.execute_consensus(tasks[0], agent_list)
                 return [result]
             return []

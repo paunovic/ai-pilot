@@ -15,15 +15,6 @@ class TaskDecompositionAnalysis(BaseModel):
     optimization_notes: list[str]
 
 
-class TaskComplexityAnalysis(BaseModel):
-    """Schema for task complexity analysis"""
-
-    complexity: Literal["low", "medium", "high"]
-    requires_multiple_agents: bool
-    preferred_strategy: Literal["sequential", "parallel", "consensus"]
-    key_factors: list[str]
-
-
 class SubtaskDecomposition(BaseModel):
     """Schema for subtask decomposition"""
 
